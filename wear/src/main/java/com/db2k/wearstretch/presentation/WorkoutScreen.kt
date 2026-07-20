@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -36,6 +37,11 @@ import com.db2k.wearstretch.data.SettingsStore
 import com.db2k.wearstretch.model.Stretch
 import java.io.File
 
+// Pager pages: left = animation/description, middle = live workout, right = controls.
+private const val PAGE_DESCRIPTION = 0
+private const val PAGE_WORKOUT = 1
+private const val PAGE_CONTROLS = 2
+
 @Composable
 fun WorkoutScreen(
     stretch: Stretch,
@@ -50,10 +56,19 @@ fun WorkoutScreen(
     currentSteps: Int,
     currentLocation: String?,
     onPauseToggle: () -> Unit,
+    onPause: () -> Unit,
     onSkip: () -> Unit,
     onCancel: () -> Unit
 ) {
-    val pagerState = rememberPagerState(pageCount = { 2 })
+    val pagerState = rememberPagerState(initialPage = PAGE_WORKOUT, pageCount = { 3 })
+
+    // Landing on the description/animation page pauses the workout so the user can
+    // read and follow along without the timer running out.
+    LaunchedEffect(pagerState.settledPage) {
+        if (pagerState.settledPage == PAGE_DESCRIPTION) {
+            onPause()
+        }
+    }
 
     HorizontalPagerScaffold(
         pagerState = pagerState,
@@ -64,7 +79,13 @@ fun WorkoutScreen(
             modifier = Modifier.fillMaxSize()
         ) { page ->
             when (page) {
-                0 -> WorkoutInfoPage(
+                PAGE_DESCRIPTION -> WorkoutDescriptionPage(
+                    stretch = stretch,
+                    isBreak = isBreak,
+                    isSwitchingSides = isSwitchingSides,
+                    isStarting = isStarting
+                )
+                PAGE_WORKOUT -> WorkoutInfoPage(
                     stretch = stretch,
                     timeLeft = timeLeft,
                     isBreak = isBreak,
@@ -76,13 +97,12 @@ fun WorkoutScreen(
                     currentSteps = currentSteps,
                     currentLocation = currentLocation
                 )
-                1 -> WorkoutControlsPage(isPaused, onPauseToggle, onSkip, onCancel)
+                PAGE_CONTROLS -> WorkoutControlsPage(isPaused, onPauseToggle, onSkip, onCancel)
             }
         }
     }
 }
 
-@SuppressLint("DiscouragedApi")
 @Composable
 private fun WorkoutInfoPage(
     stretch: Stretch,
@@ -96,18 +116,93 @@ private fun WorkoutInfoPage(
     currentSteps: Int,
     currentLocation: String?
 ) {
+    val isTransition = isBreak || isSwitchingSides || isStarting
+    val activeColor = if (isStarting) Color(0xFFFF9100) else if (isTransition) Color(0xFF00E5FF) else MaterialTheme.colorScheme.primary
+
+    // Which side of a split stretch we're currently on: 1 for the first side, 2 for the second.
+    val currentSide = if (stretch.isSplit && !isStarting) {
+        if (isSwitchingSides || (isSplitSecondHalf && !isBreak)) 2 else 1
+    } else {
+        0
+    }
+
+    // Simplified, vertically-centered layout so it reads well on circular watches.
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)
+        ) {
+            Text(
+                text = if (isStarting) "Get Ready!" else if (isSwitchingSides) "Switch Sides" else if (isBreak) "Change Position" else stretch.name,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                color = if (isStarting) Color(0xFFFF9100) else if (isTransition) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+
+            Text(
+                text = "$timeLeft",
+                style = MaterialTheme.typography.displayMedium,
+                color = activeColor
+            )
+
+            if (currentSide > 0) {
+                SplitIndicator(side = currentSide)
+            }
+
+            if ((SettingsStore.trackHeartRate.value && currentHeartRate > 0) ||
+                (SettingsStore.trackSteps.value)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (SettingsStore.trackHeartRate.value && currentHeartRate > 0) {
+                        Text(text = "❤ $currentHeartRate", color = Color.Red, style = MaterialTheme.typography.labelMedium)
+                        Spacer(modifier = Modifier.width(16.dp))
+                    }
+                    if (SettingsStore.trackSteps.value) {
+                        Text(text = "👣 $currentSteps", color = Color.Gray, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+
+            if (SettingsStore.trackLocation.value) {
+                Text(
+                    text = if (currentLocation != null) "📍 Location Set" else "📍 Searching...",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (currentLocation != null) Color.Green else Color.Gray
+                )
+            }
+
+            if (isTransition && nextStretchName != null) {
+                Text(
+                    text = if (isStarting) "First: $nextStretchName" else if (isSwitchingSides) "Next: Side 2" else "Next: $nextStretchName",
+                    style = MaterialTheme.typography.labelLarge,
+                    textAlign = TextAlign.Center,
+                    color = if (isStarting) Color(0xFFFF9100) else Color(0xFF00E5FF),
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+@SuppressLint("DiscouragedApi")
+@Composable
+private fun WorkoutDescriptionPage(
+    stretch: Stretch,
+    isBreak: Boolean,
+    isSwitchingSides: Boolean,
+    isStarting: Boolean
+) {
     val listState = rememberTransformingLazyColumnState()
     val currentContext = LocalContext.current
     val pkgName = LocalContext.current.packageName
     val isTransition = isBreak || isSwitchingSides || isStarting
-    val activeColor = if (isStarting) Color(0xFFFF9100) else if (isTransition) Color(0xFF00E5FF) else MaterialTheme.colorScheme.primary
-    
-    val remainingSplits = if (stretch.isSplit && !isStarting) {
-        if (isSwitchingSides || (isSplitSecondHalf && !isBreak)) 1 else 2
-    } else {
-        0
-    }
-    
+
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val scale by infiniteTransition.animateFloat(
         initialValue = 0.95f,
@@ -147,65 +242,12 @@ private fun WorkoutInfoPage(
         ) {
             item {
                 Text(
-                    text = if (isStarting) "Get Ready!" else if (isSwitchingSides) "Switch Sides" else if (isBreak) "Change Position" else stretch.name,
+                    text = stretch.name,
                     style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center,
-                    color = if (isStarting) Color(0xFFFF9100) else if (isTransition) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onBackground,
+                    color = if (isTransition) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
-            }
-
-            item {
-                Text(
-                    text = "$timeLeft",
-                    style = MaterialTheme.typography.displayMedium,
-                    color = activeColor
-                )
-            }
-
-            if (remainingSplits > 0) {
-                item {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    SplitIndicator(remaining = remainingSplits)
-                    Spacer(modifier = Modifier.height(6.dp))
-                }
-            }
-
-            if (SettingsStore.trackHeartRate.value || SettingsStore.trackSteps.value) {
-                item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (SettingsStore.trackHeartRate.value && currentHeartRate > 0) {
-                            Text(text = "❤ $currentHeartRate", color = Color.Red, style = MaterialTheme.typography.labelMedium)
-                            Spacer(modifier = Modifier.width(16.dp))
-                        }
-                        if (SettingsStore.trackSteps.value) {
-                            Text(text = "👣 $currentSteps", color = Color.Gray, style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
-            }
-
-            if (SettingsStore.trackLocation.value) {
-                item {
-                    Text(
-                        text = if (currentLocation != null) "📍 Location Set" else "📍 Searching...",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (currentLocation != null) Color.Green else Color.Gray,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-            }
-
-            if (isTransition && nextStretchName != null) {
-                item {
-                    Text(
-                        text = if (isStarting) "First: $nextStretchName" else if (isSwitchingSides) "Next: Side 2" else "Next: $nextStretchName",
-                        style = MaterialTheme.typography.labelLarge,
-                        textAlign = TextAlign.Center,
-                        color = if (isStarting) Color(0xFFFF9100) else Color(0xFF00E5FF),
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
             }
 
             // Stretch image/animation
@@ -355,13 +397,13 @@ private fun AnimatedVectorImage(
 }
 
 @Composable
-private fun SplitIndicator(remaining: Int) {
-    val (backgroundColor, textColor) = when (remaining) {
-        2 -> Pair(Color(0xFFFFB300), Color.Black) // Amber/Yellow
-        1 -> Pair(Color(0xFFE91E63), Color.White) // Rose/Pink
+private fun SplitIndicator(side: Int) {
+    val (backgroundColor, textColor) = when (side) {
+        1 -> Pair(Color(0xFFFFB300), Color.Black) // Side 1: Amber
+        2 -> Pair(Color(0xFFE91E63), Color.White) // Side 2: Rose
         else -> Pair(Color(0xFF00E676), Color.Black) // Vibrant Green
     }
-    
+
     Box(
         modifier = Modifier
             .size(24.dp)
@@ -369,7 +411,7 @@ private fun SplitIndicator(remaining: Int) {
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "$remaining",
+            text = "$side",
             style = MaterialTheme.typography.labelSmall,
             color = textColor,
             textAlign = TextAlign.Center

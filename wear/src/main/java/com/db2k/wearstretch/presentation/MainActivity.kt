@@ -329,21 +329,59 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                         BackHandler {
                             viewModel.cancelWorkout(context)
                         }
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "Workout Finished!", style = MaterialTheme.typography.titleLarge)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(onClick = { 
-                                    viewModel.cancelWorkout(context)
-                                    finish() 
-                                }) {
-                                    Text(text = "Sync and Close App")
+                        val finishedListState = rememberTransformingLazyColumnState()
+                        ScreenScaffold(scrollState = finishedListState) { contentPadding ->
+                            TransformingLazyColumn(
+                                state = finishedListState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = contentPadding,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                item {
+                                    Text(
+                                        text = "🎉",
+                                        style = MaterialTheme.typography.displaySmall
+                                    )
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                TextButton(onClick = {
-                                    viewModel.cancelWorkout(context)
-                                }) {
-                                    Text(text = "Exit to Routines")
+                                item {
+                                    Text(
+                                        text = "Workout Complete!",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                    )
+                                }
+                                item {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                                        onClick = {
+                                            viewModel.cancelWorkout(context)
+                                        }
+                                    ) {
+                                        Text(
+                                            text = "Back to Routines",
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                                item {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Button(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                                        colors = ButtonDefaults.filledTonalButtonColors(),
+                                        onClick = {
+                                            viewModel.cancelWorkout(context)
+                                            finish()
+                                        }
+                                    ) {
+                                        Text(
+                                            text = "Sync & Close",
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -372,6 +410,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                             currentSteps = viewModel.currentSteps,
                             currentLocation = viewModel.locationSnapshot,
                             onPauseToggle = { viewModel.togglePause() },
+                            onPause = { viewModel.pauseWorkout() },
                             onSkip = { viewModel.nextStretch(context) },
                             onCancel = {
                                 viewModel.cancelWorkout(context)

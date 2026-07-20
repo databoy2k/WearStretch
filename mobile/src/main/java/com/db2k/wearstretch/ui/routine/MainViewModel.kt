@@ -177,6 +177,11 @@ class MainViewModel : ViewModel() {
         selectedStretches.add(stretch.copy(breakDurationSeconds = breakTime))
     }
 
+    fun addStretchesToRoutine(stretches: List<Stretch>) {
+        val breakTime = defaultBreakDuration.value.toIntOrNull() ?: 5
+        selectedStretches.addAll(stretches.map { it.copy(breakDurationSeconds = breakTime) })
+    }
+
     fun applyGlobalBreakTimeToAll(seconds: Int) {
         selectedStretches.indices.forEach { i ->
             selectedStretches[i] = selectedStretches[i].copy(breakDurationSeconds = seconds)

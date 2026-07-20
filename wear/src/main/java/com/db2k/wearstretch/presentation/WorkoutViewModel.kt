@@ -45,6 +45,10 @@ class WorkoutViewModel : ViewModel() {
         WorkoutSession.isPaused = !WorkoutSession.isPaused
     }
 
+    fun pauseWorkout() {
+        WorkoutSession.isPaused = true
+    }
+
     fun nextStretch(context: Context) {
         // Send intent to WorkoutService to trigger next stretch
         val intent = Intent(context, WorkoutService::class.java).apply {
