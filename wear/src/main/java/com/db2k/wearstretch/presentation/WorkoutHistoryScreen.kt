@@ -57,9 +57,9 @@ fun WorkoutHistoryScreen(onBack: () -> Unit, onSyncClick: () -> Unit) {
                         }
                     ) {
                         if (record.isSynced) {
-                            Icon(Icons.Default.CloudDone, contentDescription = "Synced", tint = Color.Green)
+                            Icon(Icons.Default.CloudDone, contentDescription = "Sent to phone", tint = Color.Green)
                         } else {
-                            Icon(Icons.Default.CloudOff, contentDescription = "Not Synced", tint = Color.LightGray)
+                            Icon(Icons.Default.CloudOff, contentDescription = "Not sent yet", tint = Color.LightGray)
                         }
                     }
                 }
@@ -69,11 +69,11 @@ fun WorkoutHistoryScreen(onBack: () -> Unit, onSyncClick: () -> Unit) {
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         onClick = {
                             onSyncClick()
-                            // Refresh history after a short delay to see updated sync status
+                            // Refresh so any newly-published records update their icon
                             history = repository.getHistory()
                         }
                     ) {
-                        Text(text = "Retry Sync")
+                        Text(text = "Resend to Phone")
                     }
                 }
             }

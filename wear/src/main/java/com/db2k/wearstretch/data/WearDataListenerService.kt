@@ -27,6 +27,15 @@ class WearDataListenerService : WearableListenerService() {
                 if (event.type == DataEvent.TYPE_CHANGED) {
                     processSettings(event.dataItem)
                 }
+            } else if (path?.startsWith(DataLayerPaths.WORKOUT_RESULT_PREFIX) == true) {
+                // The phone acks a delivered workout by deleting its DataItem.
+                // That deletion is our confirmation the workout reached the phone,
+                // so mark the local history record as sent. (We ignore the
+                // TYPE_CHANGED echo of our own publish — only the delete counts.)
+                if (event.type == DataEvent.TYPE_DELETED) {
+                    val id = path.removePrefix(DataLayerPaths.WORKOUT_RESULT_PREFIX)
+                    WorkoutRepository(this).updateSyncStatus(id, true)
+                }
             } else if (path?.startsWith("/routines/") == true) {
                 // Handle legacy individual items by deleting them
                 Wearable.getDataClient(this).deleteDataItems(event.dataItem.uri)

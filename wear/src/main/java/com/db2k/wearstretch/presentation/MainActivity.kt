@@ -61,9 +61,9 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         super.onCreate(savedInstanceState)
         
         refreshRoutines()
-        // syncUnsynced is driven from onResume() (which always runs right after
-        // onCreate at launch); calling it here too caused overlapping passes that
-        // re-sent the same records. The syncMutex guards it either way.
+        // Re-publish any workout whose DataItem write previously failed. Normally
+        // a no-op; workouts are published the moment they finish.
+        viewModel.publishUnsynced(this)
 
         setContent {
             WearStretchTheme {
@@ -423,7 +423,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                         when (currentScreen) {
                             "history" -> WorkoutHistoryScreen(
                                 onBack = { currentScreen = "routines" },
-                                onSyncClick = { viewModel.forceSyncAll(context) }
+                                onSyncClick = { viewModel.publishUnsynced(context) }
                             )
                             else -> RoutineSelectionScreen(
                                 onRoutineSelected = { routine ->
@@ -452,7 +452,6 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     override fun onResume() {
         super.onResume()
         dataClient.addListener(this)
-        viewModel.syncUnsynced(this)
     }
 
     override fun onPause() {

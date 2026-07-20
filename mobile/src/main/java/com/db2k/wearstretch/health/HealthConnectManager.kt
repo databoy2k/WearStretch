@@ -3,6 +3,7 @@ package com.db2k.wearstretch.health
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.ExerciseRoute
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.StepsRecord
@@ -51,8 +52,14 @@ class HealthConnectManager(private val context: Context) {
         location: String? = null
     ) {
         val records = mutableListOf<Record>()
-        
-        val sessionRecord = ExerciseSessionRecord(
+
+        // Attach the captured location as a single-point ExerciseRoute so it is
+        // visible as a location in other apps (Health Connect only surfaces
+        // location via routes, not the notes field). Best-effort: if the route
+        // is unparseable we simply omit it.
+        val route = parseRoute(location, startTime.toInstant())
+
+        fun session(withRoute: ExerciseRoute?) = ExerciseSessionRecord(
             startTime = startTime.toInstant(),
             startZoneOffset = startTime.offset,
             endTime = endTime.toInstant(),
@@ -60,9 +67,10 @@ class HealthConnectManager(private val context: Context) {
             metadata = Metadata.manualEntry(clientRecordId = id),
             exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_STRETCHING,
             title = title,
-            notes = location
+            notes = location,
+            exerciseRoute = withRoute
         )
-        records.add(sessionRecord)
+        records.add(session(route))
 
         if (heartRateSamples.isNotEmpty()) {
             val hrRecord = HeartRateRecord(
@@ -98,8 +106,31 @@ class HealthConnectManager(private val context: Context) {
         try {
             healthConnectClient.insertRecords(records)
         } catch (e: Exception) {
-            android.util.Log.e("HealthConnect", "Error writing to Health Connect", e)
-            throw e
+            if (route != null) {
+                // The route may have been rejected (validation/permission). Retry
+                // without it so the session, heart rate and steps still save.
+                android.util.Log.w("HealthConnect", "Insert with route failed; retrying without route", e)
+                records[0] = session(null)
+                healthConnectClient.insertRecords(records)
+            } else {
+                android.util.Log.e("HealthConnect", "Error writing to Health Connect", e)
+                throw e
+            }
+        }
+    }
+
+    /** Parses a "lat,lng" string into a single-point [ExerciseRoute], or null. */
+    private fun parseRoute(location: String?, time: Instant): ExerciseRoute? {
+        if (location.isNullOrBlank()) return null
+        return try {
+            val parts = location.split(",")
+            if (parts.size != 2) return null
+            val lat = parts[0].trim().toDouble()
+            val lng = parts[1].trim().toDouble()
+            if (lat !in -90.0..90.0 || lng !in -180.0..180.0) return null
+            ExerciseRoute(listOf(ExerciseRoute.Location(time = time, latitude = lat, longitude = lng)))
+        } catch (e: Exception) {
+            null
         }
     }
 

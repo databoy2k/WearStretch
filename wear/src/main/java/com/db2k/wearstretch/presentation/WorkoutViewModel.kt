@@ -8,17 +8,11 @@ import com.db2k.wearstretch.data.WearToMobileSender
 import com.db2k.wearstretch.data.WorkoutRepository
 import com.db2k.wearstretch.data.WorkoutSession
 import com.db2k.wearstretch.model.Routine
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 class WorkoutViewModel : ViewModel() {
     private var messageSender: WearToMobileSender? = null
     private var workoutRepository: WorkoutRepository? = null
-    // Serializes sync passes so overlapping calls (e.g. onCreate + onResume)
-    // can't both read the unsynced list and send the same records twice.
-    private val syncMutex = Mutex()
 
     // Delegate observable states to WorkoutSession singleton
     val routine get() = WorkoutSession.routine
@@ -67,36 +61,22 @@ class WorkoutViewModel : ViewModel() {
         WorkoutSession.reset()
     }
 
-    fun syncUnsynced(context: Context) {
+    /**
+     * Re-publishes any workouts whose DataItem write previously failed. Normally
+     * a no-op (records are published the moment a workout finishes), so this is
+     * cheap to call on launch. Re-publishing is safe: identical DataItems are
+     * ignored by the data layer and the phone dedups on Health Connect insert.
+     */
+    fun publishUnsynced(context: Context) {
         if (workoutRepository == null) workoutRepository = WorkoutRepository(context.applicationContext)
         if (messageSender == null) messageSender = WearToMobileSender(context.applicationContext)
-        
-        viewModelScope.launch {
-            syncMutex.withLock {
-                val unsynced = workoutRepository?.getUnsyncedWorkouts() ?: emptyList()
-                unsynced.forEach { record ->
-                    val success = messageSender?.syncRecord(record) ?: false
-                    if (success) {
-                        workoutRepository?.updateSyncStatus(record.id, true)
-                    }
-                }
-            }
-        }
-    }
 
-    fun forceSyncAll(context: Context) {
-        if (workoutRepository == null) workoutRepository = WorkoutRepository(context.applicationContext)
-        if (messageSender == null) messageSender = WearToMobileSender(context.applicationContext)
-        
         viewModelScope.launch {
-            syncMutex.withLock {
-                val history = workoutRepository?.getHistory() ?: emptyList()
-                history.forEach { record ->
-                    val success = messageSender?.syncRecord(record) ?: false
-                    if (success) {
-                        workoutRepository?.updateSyncStatus(record.id, true)
-                    }
-                    delay(200) // Small delay between messages
+            val unsynced = workoutRepository?.getUnsyncedWorkouts() ?: emptyList()
+            unsynced.forEach { record ->
+                val published = messageSender?.publishRecord(record) ?: false
+                if (published) {
+                    workoutRepository?.updateSyncStatus(record.id, true)
                 }
             }
         }

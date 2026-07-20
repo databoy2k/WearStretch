@@ -68,12 +68,22 @@ class WorkoutService : Service(), SensorEventListener {
             return START_STICKY
         }
 
-        val routineName = WorkoutSession.routine?.name ?: "Stretching"
-        startWorkoutNotification(routineName)
-        
+        val routine = WorkoutSession.routine
+        if (routine == null || WorkoutSession.isFinished) {
+            // System-initiated restart (START_STICKY, null intent after process
+            // death) with no active session. Don't run tracking — it would
+            // fabricate an empty "Unknown" workout. Satisfy the foreground
+            // contract briefly, then stop.
+            startWorkoutNotification("Stretching")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        startWorkoutNotification(routine.name)
+
         // Start tracking
         startWorkoutTracking()
-        
+
         return START_STICKY
     }
 
@@ -94,9 +104,14 @@ class WorkoutService : Service(), SensorEventListener {
                 }
                 
                 if (SettingsStore.trackSteps.value && hasStepPermission) {
+                    // Register BOTH sensors. The detector fires immediately once
+                    // per step (reliable live count on short sessions); the
+                    // counter is authoritative but its first reading — which sets
+                    // our baseline — can be batched/delayed, so it can't be the
+                    // sole source or a brief workout may record zero steps.
                     stepSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
                     stepDetectorSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
-                    
+
                     if (stepDetectorSensor != null) {
                         sensorManager?.registerListener(this, stepDetectorSensor, SensorManager.SENSOR_DELAY_FASTEST)
                     }
@@ -292,23 +307,13 @@ class WorkoutService : Service(), SensorEventListener {
         
         Log.d("WearStretch", "Saving workout: steps=${record.stepCount}, location=${record.location}")
         workoutRepository?.saveWorkout(record)
-        
+
         serviceScope.launch {
-            val success = messageSender?.syncRecord(record) ?: false
-            if (success) {
-                workoutRepository?.updateSyncStatus(record.id, true)
-            }
-            
-            // Sync unsynced in background
-            val unsynced = workoutRepository?.getUnsyncedWorkouts() ?: emptyList()
-            unsynced.forEach { unsyncedRecord ->
-                val syncSuccess = messageSender?.syncRecord(unsyncedRecord) ?: false
-                if (syncSuccess) {
-                    workoutRepository?.updateSyncStatus(unsyncedRecord.id, true)
-                }
-            }
-            
-            // Stop service after finishing work
+            // Hand the record to the data layer and forget it. The record stays
+            // "not sent" until the PHONE confirms by deleting the DataItem (see
+            // WearDataListenerService) — a successful local publish only means it
+            // is queued, not that the phone has it, so we must not claim synced.
+            messageSender?.publishRecord(record)
             stopSelf()
         }
     }
