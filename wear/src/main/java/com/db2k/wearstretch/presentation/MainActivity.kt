@@ -61,7 +61,9 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         super.onCreate(savedInstanceState)
         
         refreshRoutines()
-        viewModel.syncUnsynced(this)
+        // syncUnsynced is driven from onResume() (which always runs right after
+        // onCreate at launch); calling it here too caused overlapping passes that
+        // re-sent the same records. The syncMutex guards it either way.
 
         setContent {
             WearStretchTheme {

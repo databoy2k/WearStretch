@@ -57,7 +57,7 @@ class HealthConnectManager(private val context: Context) {
             startZoneOffset = startTime.offset,
             endTime = endTime.toInstant(),
             endZoneOffset = endTime.offset,
-            metadata = Metadata.manualEntry(),
+            metadata = Metadata.manualEntry(clientRecordId = id),
             exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_STRETCHING,
             title = title,
             notes = location
@@ -70,7 +70,7 @@ class HealthConnectManager(private val context: Context) {
                 startZoneOffset = startTime.offset,
                 endTime = endTime.toInstant(),
                 endZoneOffset = endTime.offset,
-                metadata = Metadata.manualEntry(),
+                metadata = Metadata.manualEntry(clientRecordId = "${id}_hr"),
                 samples = heartRateSamples.mapIndexed { index, bpm ->
                     val sampleTime = startTime.toInstant().plusSeconds(index.toLong())
                     if (sampleTime.isBefore(endTime.toInstant())) {
@@ -89,7 +89,7 @@ class HealthConnectManager(private val context: Context) {
                 startZoneOffset = startTime.offset,
                 endTime = endTime.toInstant(),
                 endZoneOffset = endTime.offset,
-                metadata = Metadata.manualEntry(),
+                metadata = Metadata.manualEntry(clientRecordId = "${id}_steps"),
                 count = stepCount.toLong()
             )
             records.add(stepsRecord)

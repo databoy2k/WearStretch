@@ -10,10 +10,15 @@ import com.db2k.wearstretch.data.WorkoutSession
 import com.db2k.wearstretch.model.Routine
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class WorkoutViewModel : ViewModel() {
     private var messageSender: WearToMobileSender? = null
     private var workoutRepository: WorkoutRepository? = null
+    // Serializes sync passes so overlapping calls (e.g. onCreate + onResume)
+    // can't both read the unsynced list and send the same records twice.
+    private val syncMutex = Mutex()
 
     // Delegate observable states to WorkoutSession singleton
     val routine get() = WorkoutSession.routine
@@ -67,11 +72,13 @@ class WorkoutViewModel : ViewModel() {
         if (messageSender == null) messageSender = WearToMobileSender(context.applicationContext)
         
         viewModelScope.launch {
-            val unsynced = workoutRepository?.getUnsyncedWorkouts() ?: emptyList()
-            unsynced.forEach { record ->
-                val success = messageSender?.syncRecord(record) ?: false
-                if (success) {
-                    workoutRepository?.updateSyncStatus(record.id, true)
+            syncMutex.withLock {
+                val unsynced = workoutRepository?.getUnsyncedWorkouts() ?: emptyList()
+                unsynced.forEach { record ->
+                    val success = messageSender?.syncRecord(record) ?: false
+                    if (success) {
+                        workoutRepository?.updateSyncStatus(record.id, true)
+                    }
                 }
             }
         }
@@ -82,13 +89,15 @@ class WorkoutViewModel : ViewModel() {
         if (messageSender == null) messageSender = WearToMobileSender(context.applicationContext)
         
         viewModelScope.launch {
-            val history = workoutRepository?.getHistory() ?: emptyList()
-            history.forEach { record ->
-                val success = messageSender?.syncRecord(record) ?: false
-                if (success) {
-                    workoutRepository?.updateSyncStatus(record.id, true)
+            syncMutex.withLock {
+                val history = workoutRepository?.getHistory() ?: emptyList()
+                history.forEach { record ->
+                    val success = messageSender?.syncRecord(record) ?: false
+                    if (success) {
+                        workoutRepository?.updateSyncStatus(record.id, true)
+                    }
+                    delay(200) // Small delay between messages
                 }
-                delay(200) // Small delay between messages
             }
         }
     }
