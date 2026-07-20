@@ -3,12 +3,14 @@ package com.db2k.wearstretch.presentation
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.*
 import com.db2k.wearstretch.data.RoutineStore
+import com.db2k.wearstretch.data.SettingsStore
 import com.db2k.wearstretch.model.Routine
 
 @Composable
@@ -24,7 +26,23 @@ fun RoutineSelectionScreen(onRoutineSelected: (Routine) -> Unit, onHistoryClick:
             item {
                 ListHeader { Text(text = "Pick a Routine") }
             }
-            
+
+            // Warn when the phone app is a different version than this watch app.
+            // mobileVersion arrives via the data layer; empty until the first sync.
+            val phoneVersion = SettingsStore.mobileVersion.value
+            val watchVersion = com.db2k.wearstretch.BuildConfig.VERSION_NAME
+            if (phoneVersion.isNotEmpty() && phoneVersion != watchVersion) {
+                item {
+                    Text(
+                        text = "⚠ Version mismatch\nPhone v$phoneVersion · Watch v$watchVersion\nUpdate the watch app",
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                }
+            }
+
             if (RoutineStore.receivedRoutines.isEmpty()) {
                 item {
                     Text(text = "No routines found. Sync from your phone!", modifier = Modifier.padding(16.dp))

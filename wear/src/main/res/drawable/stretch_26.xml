@@ -1,0 +1,37 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector android:width="120dp" android:height="120dp"
+            android:viewportWidth="100" android:viewportHeight="100">
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="7" android:strokeLineCap="round" android:pathData="M38,68 L48,44" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="7" android:strokeLineCap="round" android:pathData="M62,68 L52,44" />
+            <path android:name="muscle0" android:strokeColor="#00E676" android:strokeWidth="4" android:strokeAlpha="0.85" android:strokeLineCap="round" android:pathData="M40,66 L49,45" />
+            <path android:name="muscle1" android:strokeColor="#00E676" android:strokeWidth="4" android:strokeAlpha="0.85" android:strokeLineCap="round" android:pathData="M60,66 L51,45" />
+            <group android:name="hands" android:pivotX="50" android:pivotY="58">
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M48,44 L50,38" />
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M52,44 L50,38" />
+            </group>
+        </vector>
+    </aapt:attr>
+    <target android:name="hands">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="rotation" android:duration="2600"
+                android:valueFrom="-6" android:valueTo="4" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="muscle0">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="muscle1">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+</animated-vector>

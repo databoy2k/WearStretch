@@ -1,0 +1,30 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector android:width="120dp" android:height="120dp"
+            android:viewportWidth="100" android:viewportHeight="100">
+            <path android:strokeColor="#C9D4E0" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M14,86 L86,86" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="6" android:strokeLineCap="round" android:pathData="M30,82 L50,82" />
+            <path android:fillColor="#5E8AC7" android:pathData="M18,82 a6,6.5 0 1,0 12,0 a6,6.5 0 1,0 -12,0" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M30,82 L20,84" />
+            <group android:name="open" android:pivotX="50" android:pivotY="82">
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="4.5" android:strokeLineCap="round" android:pathData="M50,82 L58,68" />
+                <path android:name="muscle0" android:fillColor="#00E676" android:fillAlpha="0.85" android:pathData="M50,79 Q55,80 54,84 Q51,85 49,82 Q49,80 50,79 Z" />
+            </group>
+        </vector>
+    </aapt:attr>
+    <target android:name="open">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="rotation" android:duration="2600"
+                android:valueFrom="0" android:valueTo="-8" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="muscle0">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="fillAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+</animated-vector>

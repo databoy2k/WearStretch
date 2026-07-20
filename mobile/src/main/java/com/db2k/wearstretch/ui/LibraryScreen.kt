@@ -1,6 +1,8 @@
 package com.db2k.wearstretch.ui
 
 import android.annotation.SuppressLint
+import android.graphics.drawable.Animatable
+import android.widget.ImageView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -23,6 +25,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import coil.ImageLoader
 import coil.compose.rememberAsyncImagePainter
 import coil.decode.GifDecoder
@@ -179,6 +182,31 @@ fun CategoryHeader(name: String, isExpanded: Boolean, onToggle: () -> Unit) {
     }
 }
 
+@Composable
+fun AnimatedVectorImage(
+    resId: Int,
+    contentDescription: String?,
+    modifier: Modifier = Modifier
+) {
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            ImageView(ctx).apply {
+                this.contentDescription = contentDescription
+                setImageResource(resId)
+                (drawable as? Animatable)?.start()
+            }
+        },
+        update = { view ->
+            if (view.drawable == null || view.tag != resId) {
+                view.tag = resId
+                view.setImageResource(resId)
+            }
+            (view.drawable as? Animatable)?.start()
+        }
+    )
+}
+
 @SuppressLint("DiscouragedApi")
 @Composable
 fun StretchItem(stretch: Stretch, onEdit: () -> Unit) {
@@ -202,22 +230,38 @@ fun StretchItem(stretch: Stretch, onEdit: () -> Unit) {
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val model = stretch.customImageUri?.let { File(it) } ?: stretch.imageKey?.let { 
-                "android.resource://$pkgName/drawable/$it"
+            val avdResId = remember(stretch.imageKey, stretch.customImageUri) {
+                val key = stretch.imageKey
+                if (stretch.customImageUri == null && key != null) {
+                    val id = currentContext.resources.getIdentifier(key, "drawable", pkgName)
+                    if (id != 0 && currentContext.getDrawable(id) is Animatable) id else 0
+                } else 0
             }
-            
-            if (model != null) {
-                Image(
-                    painter = rememberAsyncImagePainter(
-                        model = ImageRequest.Builder(currentContext)
-                            .data(model)
-                            .build(),
-                        imageLoader = imageLoader
-                    ),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
+
+            if (avdResId != 0) {
+                AnimatedVectorImage(
+                    resId = avdResId,
+                    contentDescription = stretch.name,
                     modifier = Modifier.size(64.dp).padding(end = 16.dp)
                 )
+            } else {
+                val model = stretch.customImageUri?.let { File(it) } ?: stretch.imageKey?.let {
+                    "android.resource://$pkgName/drawable/$it"
+                }
+
+                if (model != null) {
+                    Image(
+                        painter = rememberAsyncImagePainter(
+                            model = ImageRequest.Builder(currentContext)
+                                .data(model)
+                                .build(),
+                            imageLoader = imageLoader
+                        ),
+                        contentDescription = stretch.name,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(64.dp).padding(end = 16.dp)
+                    )
+                }
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = stretch.name, style = MaterialTheme.typography.titleLarge)

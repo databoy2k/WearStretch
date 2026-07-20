@@ -94,6 +94,12 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                     if (SettingsStore.trackSteps.value) {
                         list.add(Manifest.permission.ACTIVITY_RECOGNITION)
                     }
+                    // Health Foreground Service on Android 14+ needs HIGH_SAMPLING_RATE_SENSORS as a baseline
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        if (SettingsStore.trackHeartRate.value || SettingsStore.trackSteps.value) {
+                            list.add(Manifest.permission.HIGH_SAMPLING_RATE_SENSORS)
+                        }
+                    }
                     if (SettingsStore.trackLocation.value) {
                         list.add(Manifest.permission.ACCESS_COARSE_LOCATION)
                     }

@@ -1,0 +1,28 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector android:width="120dp" android:height="120dp"
+            android:viewportWidth="100" android:viewportHeight="100">
+            <path android:strokeColor="#C9D4E0" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M14,88 L86,88" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M26,86 L46,52" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M46,52 L66,86" />
+            <path android:fillColor="#5E8AC7" android:pathData="M24,80 a6,6.5 0 1,0 12,0 a6,6.5 0 1,0 -12,0" />
+            <path android:name="muscle0" android:strokeColor="#00E676" android:strokeWidth="5" android:strokeAlpha="0.85" android:strokeLineCap="round" android:pathData="M58,70 L64,84" />
+            <path android:name="muscle1" android:strokeColor="#00E676" android:strokeWidth="4" android:strokeAlpha="0.85" android:strokeLineCap="round" android:pathData="M52,60 L58,72" />
+        </vector>
+    </aapt:attr>
+    <target android:name="muscle0">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="muscle1">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+</animated-vector>

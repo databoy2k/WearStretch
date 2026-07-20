@@ -165,10 +165,13 @@ fun StretchEditDialog(
 
                 Text(text = "Illustration", style = MaterialTheme.typography.titleSmall)
                 
+                val defaultKey = if (stretch.id.toIntOrNull() != null) "stretch_${stretch.id}" else "ic_launcher_foreground"
+
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
+                    // 1. None
                     item {
                         OutlinedCard(
                             onClick = { 
@@ -176,7 +179,7 @@ fun StretchEditDialog(
                                 customImageUri = null
                             },
                             modifier = Modifier.size(80.dp),
-                            border = if (imageKey == null && (customImageUri == null)) {
+                            border = if (imageKey == null && customImageUri == null) {
                                 BorderStroke(2.dp, MaterialTheme.colorScheme.primary) 
                             } else {
                                 CardDefaults.outlinedCardBorder()
@@ -191,6 +194,40 @@ fun StretchEditDialog(
                         }
                     }
 
+                    // 2. Default (The Animation)
+                    item {
+                        OutlinedCard(
+                            onClick = { 
+                                imageKey = defaultKey
+                                customImageUri = null
+                            },
+                            modifier = Modifier.size(80.dp),
+                            border = if (imageKey == defaultKey && customImageUri == null) {
+                                BorderStroke(2.dp, MaterialTheme.colorScheme.primary) 
+                            } else {
+                                CardDefaults.outlinedCardBorder()
+                            }
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Image(
+                                        painter = rememberAsyncImagePainter(
+                                            model = ImageRequest.Builder(currentContext)
+                                                .data("android.resource://$pkgName/drawable/$defaultKey")
+                                                .build(),
+                                            imageLoader = imageLoader
+                                        ),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Text(text = "Default", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Gallery
                     item {
                         OutlinedCard(
                             onClick = { galleryLauncher.launch("image/*") },
@@ -207,33 +244,6 @@ fun StretchEditDialog(
                                     Text(text = "Gallery", style = MaterialTheme.typography.labelSmall)
                                 }
                             }
-                        }
-                    }
-                    
-                    items(PresetData.presetAnimations) { key ->
-                        OutlinedCard(
-                            onClick = { 
-                                imageKey = key
-                                customImageUri = null
-                            },
-                            modifier = Modifier.size(80.dp),
-                            border = if (imageKey == key) {
-                                BorderStroke(2.dp, MaterialTheme.colorScheme.primary) 
-                            } else {
-                                CardDefaults.outlinedCardBorder()
-                            }
-                        ) {
-                            Image(
-                                painter = rememberAsyncImagePainter(
-                                    model = ImageRequest.Builder(currentContext)
-                                        .data("android.resource://$pkgName/drawable/$key")
-                                        .build(),
-                                    imageLoader = imageLoader
-                                ),
-                                contentDescription = null,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize().padding(4.dp)
-                            )
                         }
                     }
                 }

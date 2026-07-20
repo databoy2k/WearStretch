@@ -1,0 +1,43 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector android:width="120dp" android:height="120dp"
+            android:viewportWidth="100" android:viewportHeight="100">
+            <path android:strokeColor="#C9D4E0" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M14,84 L86,84" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M50,74 L38,78" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M38,78 L40,82" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M50,74 L62,78" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M62,78 L60,82" />
+            <path android:name="muscle0" android:strokeColor="#00E676" android:strokeWidth="4" android:strokeAlpha="0.85" android:strokeLineCap="round" android:pathData="M48,76 L40,79" />
+            <path android:name="muscle1" android:strokeColor="#00E676" android:strokeWidth="4" android:strokeAlpha="0.85" android:strokeLineCap="round" android:pathData="M52,76 L60,79" />
+            <group android:name="rock" android:pivotX="50" android:pivotY="74">
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M50,74 L44,66" />
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="4.5" android:strokeLineCap="round" android:pathData="M44,66 L42,66" />
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M50,74 L56,66" />
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="4.5" android:strokeLineCap="round" android:pathData="M56,66 L58,66" />
+                <path android:fillColor="#5E8AC7" android:pathData="M44,64 a6,6.5 0 1,0 12,0 a6,6.5 0 1,0 -12,0" />
+            </group>
+        </vector>
+    </aapt:attr>
+    <target android:name="rock">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="rotation" android:duration="2400"
+                android:valueFrom="-2" android:valueTo="2" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="muscle0">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="muscle1">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+</animated-vector>

@@ -1,0 +1,50 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector android:width="120dp" android:height="120dp"
+            android:viewportWidth="100" android:viewportHeight="100">
+            <path android:strokeColor="#C9D4E0" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M14,88 L86,88" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="6.5" android:strokeLineCap="round" android:pathData="M50,80 L50,62" />
+            <path android:fillColor="#5E8AC7" android:pathData="M43.5,54 a6.5,7.5 0 1,0 13.0,0 a6.5,7.5 0 1,0 -13.0,0" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="4.5" android:strokeLineCap="round" android:pathData="M50,66 L50,80" />
+            <group android:name="kneeL" android:pivotX="50" android:pivotY="81">
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M50,80 L40,84" />
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M40,84 L50,86" />
+                <path android:name="muscle0" android:strokeColor="#00E676" android:strokeWidth="4" android:strokeAlpha="0.85" android:strokeLineCap="round" android:pathData="M48,81 L42,84" />
+            </group>
+            <group android:name="kneeR" android:pivotX="50" android:pivotY="81">
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M50,80 L60,84" />
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M60,84 L50,86" />
+                <path android:name="muscle1" android:strokeColor="#00E676" android:strokeWidth="4" android:strokeAlpha="0.85" android:strokeLineCap="round" android:pathData="M52,81 L58,84" />
+            </group>
+        </vector>
+    </aapt:attr>
+    <target android:name="kneeL">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="rotation" android:duration="1600"
+                android:valueFrom="0" android:valueTo="-4" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="kneeR">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="rotation" android:duration="1600"
+                android:valueFrom="0" android:valueTo="4" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="muscle0">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="muscle1">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+</animated-vector>

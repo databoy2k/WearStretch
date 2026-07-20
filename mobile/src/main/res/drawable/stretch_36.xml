@@ -1,0 +1,30 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector android:width="120dp" android:height="120dp"
+            android:viewportWidth="100" android:viewportHeight="100">
+            <path android:strokeColor="#C9D4E0" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M14,86 L86,86" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M40,84 L56,82" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M56,82 L74,86" />
+            <path android:name="muscle0" android:fillColor="#00E676" android:fillAlpha="0.85" android:pathData="M46,80 Q51,80 51,84 Q47,85 45,82 Q45,80 46,80 Z" />
+            <group android:name="fold" android:pivotX="52" android:pivotY="74">
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="6.5" android:strokeLineCap="round" android:pathData="M52,74 L52,58" />
+                <path android:fillColor="#5E8AC7" android:pathData="M45.5,50 a6.5,7.5 0 1,0 13.0,0 a6.5,7.5 0 1,0 -13.0,0" />
+            </group>
+        </vector>
+    </aapt:attr>
+    <target android:name="fold">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="rotation" android:duration="2800"
+                android:valueFrom="0" android:valueTo="4" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="muscle0">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="fillAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+</animated-vector>

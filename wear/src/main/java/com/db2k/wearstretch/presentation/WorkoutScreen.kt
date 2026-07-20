@@ -1,6 +1,8 @@
 package com.db2k.wearstretch.presentation
 
 import android.annotation.SuppressLint
+import android.graphics.drawable.Animatable
+import android.widget.ImageView
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -19,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.foundation.pager.HorizontalPager
@@ -125,6 +128,16 @@ private fun WorkoutInfoPage(
             .build()
     }
 
+    // Resolve any built-in AnimatedVectorDrawable up-front (must be in composable scope,
+    // not inside the LazyColumn DSL). 0 means "not an AVD" -> fall back to the Coil path.
+    val avdResId = remember(stretch.imageKey, stretch.customImageUri) {
+        val key = stretch.imageKey
+        if (stretch.customImageUri == null && key != null) {
+            val id = currentContext.resources.getIdentifier(key, "drawable", pkgName)
+            if (id != 0 && currentContext.getDrawable(id) is Animatable) id else 0
+        } else 0
+    }
+
     ScreenScaffold(scrollState = listState) { contentPadding ->
         TransformingLazyColumn(
             state = listState,
@@ -197,29 +210,45 @@ private fun WorkoutInfoPage(
 
             // Stretch image/animation
             if (SettingsStore.showAnimations.value) {
-                val model = stretch.customImageUri?.let { File(it) } ?: stretch.imageKey?.let { 
-                    "android.resource://$pkgName/drawable/$it"
-                }
-
-                if (model != null) {
+                // AnimatedVectorDrawable (built-in vector animations) render via ImageView so
+                // the drawable's ObjectAnimators actually run — Coil only draws a static first
+                // frame. Custom GIF/WebP files still flow through Coil below. avdResId is
+                // resolved above in composable scope.
+                if (avdResId != 0) {
                     item {
-                        Image(
-                            painter = rememberAsyncImagePainter(
-                                model = ImageRequest.Builder(currentContext)
-                                    .data(model)
-                                    .build(),
-                                imageLoader = imageLoader
-                            ),
-                            contentDescription = null,
-                            contentScale = ContentScale.Fit,
+                        AnimatedVectorImage(
+                            resId = avdResId,
+                            contentDescription = stretch.name,
                             modifier = Modifier
-                                .size(140.dp) 
-                                .graphicsLayer {
-                                    scaleX = scale
-                                    scaleY = scale
-                                }
+                                .size(140.dp)
                                 .padding(8.dp)
                         )
+                    }
+                } else {
+                    val model = stretch.customImageUri?.let { File(it) } ?: stretch.imageKey?.let {
+                        "android.resource://$pkgName/drawable/$it"
+                    }
+
+                    if (model != null) {
+                        item {
+                            Image(
+                                painter = rememberAsyncImagePainter(
+                                    model = ImageRequest.Builder(currentContext)
+                                        .data(model)
+                                        .build(),
+                                    imageLoader = imageLoader
+                                ),
+                                contentDescription = stretch.name,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .size(140.dp)
+                                    .graphicsLayer {
+                                        scaleX = scale
+                                        scaleY = scale
+                                    }
+                                    .padding(8.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -298,6 +327,31 @@ private fun WorkoutControlsPage(
             }
         }
     }
+}
+
+@Composable
+private fun AnimatedVectorImage(
+    resId: Int,
+    contentDescription: String?,
+    modifier: Modifier = Modifier
+) {
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            ImageView(ctx).apply {
+                this.contentDescription = contentDescription
+                setImageResource(resId)
+                (drawable as? Animatable)?.start()
+            }
+        },
+        update = { view ->
+            if (view.drawable == null || view.tag != resId) {
+                view.tag = resId
+                view.setImageResource(resId)
+            }
+            (view.drawable as? Animatable)?.start()
+        }
+    )
 }
 
 @Composable

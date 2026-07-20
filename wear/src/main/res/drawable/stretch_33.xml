@@ -1,0 +1,22 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector android:width="120dp" android:height="120dp"
+            android:viewportWidth="100" android:viewportHeight="100">
+            <path android:strokeColor="#C9D4E0" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M14,84 L86,84" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M44,76 L44,84" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M46,60 L44,76" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="6.5" android:strokeLineCap="round" android:pathData="M46,60 L64,74" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="4.5" android:strokeLineCap="round" android:pathData="M64,74 L78,76" />
+            <path android:fillColor="#5E8AC7" android:pathData="M62,74 a6,7 0 1,0 12,0 a6,7 0 1,0 -12,0" />
+            <path android:name="muscle0" android:strokeColor="#00E676" android:strokeWidth="5" android:strokeAlpha="0.85" android:strokeLineCap="round" android:pathData="M48,62 L62,72" />
+        </vector>
+    </aapt:attr>
+    <target android:name="muscle0">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="strokeAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+</animated-vector>

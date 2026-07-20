@@ -1,0 +1,48 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector android:width="120dp" android:height="120dp"
+            android:viewportWidth="100" android:viewportHeight="100">
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5.5" android:strokeLineCap="round" android:pathData="M47,66 L46,90" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5.5" android:strokeLineCap="round" android:pathData="M53,66 L54,90" />
+            <path android:fillColor="#5E8AC7" android:pathData="M43,40 L45,63 Q45,66 47,66 L53,66 Q55,66 55,63 L57,40 Q50,36.5 43,40 Z" />
+            <path android:fillColor="#5E8AC7" android:pathData="M42.5,24 a7.5,8.5 0 1,0 15.0,0 a7.5,8.5 0 1,0 -15.0,0" />
+            <path android:name="muscle0" android:fillColor="#00E676" android:fillAlpha="0.85" android:pathData="M54,39 Q60,39 60,45 Q60,48 55,47 Q52.5,43.5 53,40 Q53,39 54,39 Z" />
+            <path android:name="muscle1" android:fillColor="#00E676" android:fillAlpha="0.85" android:pathData="M46,39 Q40,39 40,45 Q40,48 45,47 Q47.5,43.5 47,40 Q47,39 46,39 Z" />
+            <group android:name="armR" android:pivotX="57" android:pivotY="41">
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="4.5" android:strokeLineCap="round" android:pathData="M57,41 L64,55" />
+            </group>
+            <group android:name="armL" android:pivotX="43" android:pivotY="41">
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="4.5" android:strokeLineCap="round" android:pathData="M43,41 L36,55" />
+            </group>
+        </vector>
+    </aapt:attr>
+    <target android:name="armR">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="rotation" android:duration="2600"
+                android:valueFrom="0" android:valueTo="360" android:repeatCount="infinite" android:repeatMode="restart"
+                android:interpolator="@android:anim/linear_interpolator" />
+        </aapt:attr>
+    </target>
+    <target android:name="armL">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="rotation" android:duration="2600"
+                android:valueFrom="0" android:valueTo="-360" android:repeatCount="infinite" android:repeatMode="restart"
+                android:interpolator="@android:anim/linear_interpolator" />
+        </aapt:attr>
+    </target>
+    <target android:name="muscle0">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="fillAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="muscle1">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="fillAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+</animated-vector>

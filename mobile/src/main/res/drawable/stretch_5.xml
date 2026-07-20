@@ -1,0 +1,31 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector android:width="120dp" android:height="120dp"
+            android:viewportWidth="100" android:viewportHeight="100">
+            <path android:strokeColor="#C9D4E0" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M14,84 L82,84" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="5.5" android:strokeLineCap="round" android:pathData="M56,82 L72,83" />
+            <path android:strokeColor="#5E8AC7" android:strokeWidth="6.5" android:strokeLineCap="round" android:pathData="M56,82 L54,68" />
+            <group android:name="fold" android:pivotX="54" android:pivotY="68">
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="6.5" android:strokeLineCap="round" android:pathData="M54,68 L34,74" />
+                <path android:strokeColor="#5E8AC7" android:strokeWidth="4.5" android:strokeLineCap="round" android:pathData="M40,72 L16,80" />
+                <path android:fillColor="#5E8AC7" android:pathData="M20.0,72 a6.5,7.5 0 1,0 13.0,0 a6.5,7.5 0 1,0 -13.0,0" />
+                <path android:name="muscle0" android:fillColor="#00E676" android:fillAlpha="0.85" android:pathData="M53,66 Q47,68 41,71 Q43,75 49,72 Q54,70 55,67 Q55,65 53,66 Z" />
+            </group>
+        </vector>
+    </aapt:attr>
+    <target android:name="fold">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="rotation" android:duration="3000"
+                android:valueFrom="0" android:valueTo="3" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+    <target android:name="muscle0">
+        <aapt:attr name="android:animation">
+            <objectAnimator android:propertyName="fillAlpha" android:duration="900"
+                android:valueFrom="0.3" android:valueTo="1.0" android:repeatCount="infinite" android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate" />
+        </aapt:attr>
+    </target>
+</animated-vector>
