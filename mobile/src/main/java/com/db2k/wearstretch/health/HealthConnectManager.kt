@@ -244,10 +244,13 @@ class HealthConnectManager(private val context: Context) {
     }
 
     suspend fun deleteAllStretchingWorkouts() {
-        healthConnectClient.deleteRecords(
-            ExerciseSessionRecord::class,
-            timeRangeFilter = TimeRangeFilter.after(ZonedDateTime.now().minusDays(30).toInstant())
-        )
+        // Health Connect only lets an app delete its own records, so this never
+        // touches openGym/Sparky data. Heart rate and steps written with each
+        // stretch go too, otherwise they'd linger as orphans in other apps.
+        val range = TimeRangeFilter.after(ZonedDateTime.now().minusDays(30).toInstant())
+        healthConnectClient.deleteRecords(ExerciseSessionRecord::class, timeRangeFilter = range)
+        healthConnectClient.deleteRecords(HeartRateRecord::class, timeRangeFilter = range)
+        healthConnectClient.deleteRecords(StepsRecord::class, timeRangeFilter = range)
     }
 
     suspend fun deleteWorkout(workout: ExerciseSessionRecord) {
@@ -256,6 +259,16 @@ class HealthConnectManager(private val context: Context) {
             recordIdsList = listOf(workout.metadata.id),
             clientRecordIdsList = emptyList()
         )
+        // writeWorkout() stores this stretch's heart rate and steps as
+        // "<id>_hr" / "<id>_steps". Without this, deleting a stretch left its
+        // steps counted in Sparky and Fitbit.
+        val clientId = workout.metadata.clientRecordId ?: return
+        runCatching {
+            healthConnectClient.deleteRecords(HeartRateRecord::class, emptyList(), listOf("${clientId}_hr"))
+        }
+        runCatching {
+            healthConnectClient.deleteRecords(StepsRecord::class, emptyList(), listOf("${clientId}_steps"))
+        }
     }
 }
 
