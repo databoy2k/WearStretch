@@ -64,7 +64,7 @@ class WorkoutService : Service(), SensorEventListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "ACTION_NEXT_STRETCH") {
-            nextStretch()
+            skip()
             return START_STICKY
         }
 
@@ -273,6 +273,23 @@ class WorkoutService : Service(), SensorEventListener {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * "Skip" = end the current phase now and go to the next one. Previously this
+     * always jumped to the next stretch, so skipping "Get Ready" skipped the first
+     * stretch and skipping "Switch Sides" skipped side 2 entirely.
+     */
+    fun skip() {
+        val current = WorkoutSession.routine?.stretches?.getOrNull(WorkoutSession.currentStretchIndex)
+        when {
+            current == null -> finishWorkout()
+            WorkoutSession.isStarting -> startStretch(current, secondHalf = false)
+            WorkoutSession.isSwitchingSides -> startStretch(current, secondHalf = true)
+            WorkoutSession.isBreak -> nextStretch()
+            current.isSplit && !WorkoutSession.isSplitSecondHalf -> startStretch(current, secondHalf = true)
+            else -> nextStretch()
         }
     }
 

@@ -74,10 +74,11 @@ class WorkoutViewModel : ViewModel() {
         viewModelScope.launch {
             val unsynced = workoutRepository?.getUnsyncedWorkouts() ?: emptyList()
             unsynced.forEach { record ->
-                val published = messageSender?.publishRecord(record) ?: false
-                if (published) {
-                    workoutRepository?.updateSyncStatus(record.id, true)
-                }
+                // Only queue it. A successful local publish does NOT mean the phone
+                // has it; the record turns green when the phone deletes the
+                // DataItem (WearDataListenerService). Marking it synced here made
+                // every relaunch show workouts as "sent" with no phone at all.
+                messageSender?.publishRecord(record)
             }
         }
     }

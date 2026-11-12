@@ -78,7 +78,7 @@ fun RoutineSelectionScreen(onRoutineSelected: (Routine) -> Unit, onHistoryClick:
                     TitleCard(
                         onClick = { onRoutineSelected(routine) },
                         title = { Text(text = routine.name) },
-                        subtitle = { Text(text = "${routine.stretches.size} stretches") }
+                        subtitle = { Text(text = "${routine.stretches.size} stretches · ${routineMinutesLabel(routine)}") }
                     )
                 }
             }
@@ -102,4 +102,12 @@ fun RoutineSelectionScreen(onRoutineSelected: (Routine) -> Unit, onHistoryClick:
             }
         }
     }
+}
+
+/** Rough total time including breaks and side switches, e.g. "~6 min". */
+internal fun routineMinutesLabel(routine: Routine): String {
+    val seconds = routine.stretches.sumOf { st ->
+        st.durationSeconds + st.breakDurationSeconds + if (st.isSplit) st.splitBreakDurationSeconds else 0
+    }
+    return "~${((seconds + 30) / 60).coerceAtLeast(1)} min"
 }

@@ -1,6 +1,9 @@
 package com.db2k.wearstretch.presentation
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import android.graphics.drawable.Animatable
 import android.widget.ImageView
 import androidx.compose.animation.core.*
@@ -63,10 +66,19 @@ fun WorkoutScreen(
     val pagerState = rememberPagerState(initialPage = PAGE_WORKOUT, pageCount = { 3 })
 
     // Landing on the description/animation page pauses the workout so the user can
-    // read and follow along without the timer running out.
+    // read and follow along without the timer running out. Coming back resumes it
+    // again, but only if this page was what paused it (a manual pause stays).
+    var autoPaused by remember { mutableStateOf(false) }
     LaunchedEffect(pagerState.settledPage) {
-        if (pagerState.settledPage == PAGE_DESCRIPTION) {
-            onPause()
+        when (pagerState.settledPage) {
+            PAGE_DESCRIPTION -> if (!isPaused) {
+                onPause()
+                autoPaused = true
+            }
+            PAGE_WORKOUT -> if (autoPaused) {
+                autoPaused = false
+                if (isPaused) onPauseToggle()
+            }
         }
     }
 
@@ -95,7 +107,12 @@ fun WorkoutScreen(
                     nextStretchName = nextStretchName,
                     currentHeartRate = currentHeartRate,
                     currentSteps = currentSteps,
-                    currentLocation = currentLocation
+                    currentLocation = currentLocation,
+                    isPaused = isPaused,
+                    onPauseToggle = {
+                        autoPaused = false
+                        onPauseToggle()
+                    }
                 )
                 PAGE_CONTROLS -> WorkoutControlsPage(isPaused, onPauseToggle, onSkip, onCancel)
             }
@@ -114,14 +131,18 @@ private fun WorkoutInfoPage(
     nextStretchName: String?,
     currentHeartRate: Int,
     currentSteps: Int,
-    currentLocation: String?
+    currentLocation: String?,
+    isPaused: Boolean,
+    onPauseToggle: () -> Unit
 ) {
     val isTransition = isBreak || isSwitchingSides || isStarting
     val activeColor = if (isStarting) Color(0xFFFF9100) else if (isTransition) Color(0xFF00E5FF) else MaterialTheme.colorScheme.primary
 
     // Which side of a split stretch we're currently on: 1 for the first side, 2 for the second.
-    val currentSide = if (stretch.isSplit && !isStarting) {
-        if (isSwitchingSides || (isSplitSecondHalf && !isBreak)) 2 else 1
+    // Hidden during "Change Position" breaks: there it would show a side for a
+    // stretch that hasn't started yet.
+    val currentSide = if (stretch.isSplit && !isStarting && !isBreak) {
+        if (isSwitchingSides || isSplitSecondHalf) 2 else 1
     } else {
         0
     }
@@ -145,11 +166,20 @@ private fun WorkoutInfoPage(
                 modifier = Modifier.padding(horizontal = 8.dp)
             )
 
+            // Tap the timer to pause/resume without going to the Controls page.
             Text(
                 text = "$timeLeft",
                 style = MaterialTheme.typography.displayMedium,
-                color = activeColor
+                color = if (isPaused) activeColor.copy(alpha = 0.4f) else activeColor,
+                modifier = Modifier.clickable(onClickLabel = if (isPaused) "Resume" else "Pause") { onPauseToggle() }
             )
+            if (isPaused) {
+                Text(
+                    text = "Paused · tap to resume",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFFFFB300)
+                )
+            }
 
             if (currentSide > 0) {
                 SplitIndicator(side = currentSide)
@@ -404,14 +434,15 @@ private fun SplitIndicator(side: Int) {
         else -> Pair(Color(0xFF00E676), Color.Black) // Vibrant Green
     }
 
+    // Spelled out: a bare "1"/"2" dot was easy to misread as "stretches left".
     Box(
         modifier = Modifier
-            .size(24.dp)
-            .background(color = backgroundColor, shape = CircleShape),
+            .background(color = backgroundColor, shape = CircleShape)
+            .padding(horizontal = 10.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "$side",
+            text = "Side $side of 2",
             style = MaterialTheme.typography.labelSmall,
             color = textColor,
             textAlign = TextAlign.Center
