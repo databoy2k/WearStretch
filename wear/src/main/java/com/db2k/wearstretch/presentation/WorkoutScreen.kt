@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import android.graphics.drawable.Animatable
 import android.widget.ImageView
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -61,7 +62,13 @@ fun WorkoutScreen(
     onPauseToggle: () -> Unit,
     onPause: () -> Unit,
     onSkip: () -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onPrevious: () -> Unit = {},
+    onExtend: () -> Unit = {},
+    phaseDurationSeconds: Int = 0,
+    stretchNumber: Int = 0,
+    stretchCount: Int = 0,
+    totalSecondsLeft: Int = 0
 ) {
     val pagerState = rememberPagerState(initialPage = PAGE_WORKOUT, pageCount = { 3 })
 
@@ -86,6 +93,7 @@ fun WorkoutScreen(
         pagerState = pagerState,
         modifier = Modifier.fillMaxSize()
     ) {
+      Box(modifier = Modifier.fillMaxSize()) {
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize()
@@ -109,15 +117,53 @@ fun WorkoutScreen(
                     currentSteps = currentSteps,
                     currentLocation = currentLocation,
                     isPaused = isPaused,
+                    positionLabel = if (stretchCount > 0) "$stretchNumber/$stretchCount · ${clockLabel(totalSecondsLeft)} left" else null,
                     onPauseToggle = {
                         autoPaused = false
                         onPauseToggle()
                     }
                 )
-                PAGE_CONTROLS -> WorkoutControlsPage(isPaused, onPauseToggle, onSkip, onCancel)
+                PAGE_CONTROLS -> WorkoutControlsPage(isPaused, onPauseToggle, onPrevious, onSkip, onExtend, onCancel)
             }
         }
+
+        // Ring around the bezel: how much of the current phase is left. Drawn over
+        // every page so the timer is never out of sight, even on the illustration.
+        val progress = if (phaseDurationSeconds > 0) timeLeft.toFloat() / phaseDurationSeconds else 0f
+        val ringColor = when {
+            isPaused -> Color(0xFFFFB300)
+            isStarting -> Color(0xFFFF9100)
+            isBreak || isSwitchingSides -> Color(0xFF00E5FF)
+            else -> MaterialTheme.colorScheme.primary
+        }
+        // Drawn by hand: the Wear M3 CircularProgressIndicator only rendered its
+        // track here (tested on a Wear OS 5 emulator).
+        Canvas(modifier = Modifier.fillMaxSize().padding(3.dp)) {
+            val stroke = 5.dp.toPx()
+            val inset = stroke / 2
+            val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
+            val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
+            drawArc(
+                color = ringColor.copy(alpha = 0.18f), startAngle = -90f, sweepAngle = 360f,
+                useCenter = false, topLeft = topLeft, size = arcSize,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
+            )
+            drawArc(
+                color = ringColor, startAngle = -90f, sweepAngle = 360f * progress.coerceIn(0f, 1f),
+                useCenter = false, topLeft = topLeft, size = arcSize,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+            )
+        }
+
+      }
     }
+}
+
+internal fun clockLabel(totalSeconds: Int): String {
+    val s = totalSeconds.coerceAtLeast(0)
+    return "%d:%02d".format(s / 60, s % 60)
 }
 
 @Composable
@@ -133,6 +179,7 @@ private fun WorkoutInfoPage(
     currentSteps: Int,
     currentLocation: String?,
     isPaused: Boolean,
+    positionLabel: String?,
     onPauseToggle: () -> Unit
 ) {
     val isTransition = isBreak || isSwitchingSides || isStarting
@@ -158,6 +205,14 @@ private fun WorkoutInfoPage(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)
         ) {
+            // "3/14 · 4:12 left": where you are in the whole routine.
+            if (positionLabel != null) {
+                Text(
+                    text = positionLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Text(
                 text = if (isStarting) "Get Ready!" else if (isSwitchingSides) "Switch Sides" else if (isBreak) "Change Position" else stretch.name,
                 style = MaterialTheme.typography.titleMedium,
@@ -276,7 +331,8 @@ private fun WorkoutDescriptionPage(
                     style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center,
                     color = if (isTransition) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    // Extra inset: the top of a round screen is narrow, long names clipped.
+                    modifier = Modifier.padding(start = 28.dp, end = 28.dp, top = 12.dp)
                 )
             }
 
@@ -330,7 +386,7 @@ private fun WorkoutDescriptionPage(
                     text = stretch.description,
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 32.dp)
                 )
             }
         }
@@ -341,11 +397,25 @@ private fun WorkoutDescriptionPage(
 private fun WorkoutControlsPage(
     isPaused: Boolean,
     onPauseToggle: () -> Unit,
+    onPrevious: () -> Unit,
     onSkip: () -> Unit,
+    onExtend: () -> Unit,
     onCancel: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     val listState = rememberTransformingLazyColumnState()
+    // Two-tap cancel: one stray tap must not throw away a workout.
+    var confirmCancel by remember { mutableStateOf(false) }
+    LaunchedEffect(confirmCancel) {
+        if (confirmCancel) {
+            kotlinx.coroutines.delay(3000)
+            confirmCancel = false
+        }
+    }
+    fun tap(action: () -> Unit) {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        action()
+    }
 
     ScreenScaffold(scrollState = listState) { contentPadding ->
         TransformingLazyColumn(
@@ -354,47 +424,58 @@ private fun WorkoutControlsPage(
             contentPadding = contentPadding,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            item {
-                ListHeader {
-                    Text(text = "Controls")
-                }
-            }
+            item { ListHeader { Text(text = "Controls") } }
 
             item {
                 Button(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onPauseToggle()
-                    }
+                    onClick = { tap(onPauseToggle) }
                 ) {
                     Text(text = if (isPaused) "Resume" else "Pause")
                 }
             }
 
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onSkip()
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(text = "Skip")
+                    OutlinedButton(modifier = Modifier.weight(1f), onClick = { tap(onPrevious) }) {
+                        Text(text = "Back", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    }
+                    OutlinedButton(modifier = Modifier.weight(1f), onClick = { tap(onSkip) }) {
+                        Text(text = "Skip", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    }
                 }
             }
 
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(
+                OutlinedButton(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    onClick = { tap(onExtend) }
+                ) {
+                    Text(text = "+10 seconds", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                }
+            }
+
+            item {
+                TextButton(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
                     onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onCancel()
+                        if (confirmCancel) {
+                            confirmCancel = false
+                            tap(onCancel)
+                        } else {
+                            confirmCancel = true
+                        }
                     }
                 ) {
-                    Text(text = "Cancel Workout", color = MaterialTheme.colorScheme.error)
+                    Text(
+                        text = if (confirmCancel) "Tap again to cancel" else "Cancel Workout",
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }

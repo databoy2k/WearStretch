@@ -56,6 +56,14 @@ class WorkoutViewModel : ViewModel() {
         context.startService(intent)
     }
 
+    fun previous(context: Context) = sendToService(context, WorkoutService.ACTION_PREVIOUS)
+
+    fun extend(context: Context) = sendToService(context, WorkoutService.ACTION_EXTEND)
+
+    private fun sendToService(context: Context, action: String) {
+        context.startService(Intent(context, WorkoutService::class.java).setAction(action))
+    }
+
     fun cancelWorkout(context: Context) {
         context.stopService(Intent(context, WorkoutService::class.java))
         WorkoutSession.reset()
