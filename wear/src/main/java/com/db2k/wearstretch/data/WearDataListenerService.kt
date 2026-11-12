@@ -50,6 +50,17 @@ class WearDataListenerService : WearableListenerService() {
             Log.d("WearStretch", "Refresh signal received")
         } else if (messageEvent.path == DataLayerPaths.START_APP) {
             Log.d("WearStretch", "Start app signal received")
+            // Optional payload "routineId<newline>reason" from the phone's cool-down
+            // suggestion; empty payload just opens the app as before.
+            val payload = messageEvent.data?.toString(Charsets.UTF_8).orEmpty()
+            if (payload.isNotBlank()) {
+                val parts = payload.split("\n", limit = 2)
+                RoutineStore.suggestion.value = RoutineSuggestion(
+                    routineId = parts[0],
+                    reason = parts.getOrElse(1) { "" },
+                    receivedAtMillis = System.currentTimeMillis()
+                )
+            }
             val intent = Intent(this, com.db2k.wearstretch.presentation.MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }

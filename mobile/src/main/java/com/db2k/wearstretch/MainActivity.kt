@@ -30,6 +30,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.db2k.wearstretch.health.HealthConnectManager
+import com.db2k.wearstretch.cooldown.CooldownChecker
+import com.db2k.wearstretch.cooldown.CooldownWorker
+import androidx.health.connect.client.permission.HealthPermission
 import com.db2k.wearstretch.ui.DashboardScreen
 import com.db2k.wearstretch.ui.LibraryScreen
 import com.db2k.wearstretch.ui.routine.RoutineBuilderScreen
@@ -56,10 +59,17 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { _ -> }
 
+    private fun askedForBackgroundRead() =
+        getSharedPreferences("cooldown_prefs", MODE_PRIVATE).getBoolean("asked_bg_read", false)
+
+    private fun markAskedForBackgroundRead() =
+        getSharedPreferences("cooldown_prefs", MODE_PRIVATE).edit().putBoolean("asked_bg_read", true).apply()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         mainViewModel.init(this)
+        if (CooldownChecker.isEnabled(this)) CooldownWorker.schedule(this)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -87,6 +97,8 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             } catch (_: Exception) { }
+                            // Foreground read works even without the background permission.
+                            try { CooldownChecker.check(this@MainActivity) } catch (_: Exception) { }
                         }
                     }
                 }
@@ -103,8 +115,19 @@ class MainActivity : ComponentActivity() {
                     if (sdkStatus == HealthConnectClient.SDK_AVAILABLE) {
                         val hasAll = healthConnectManager.hasAllPermissions()
                         android.util.Log.d("WearStretchHC", "Has all HC permissions: $hasAll")
+                        val wantBackground = CooldownChecker.isEnabled(this@MainActivity) &&
+                            healthConnectManager.backgroundReadAvailable() &&
+                            !healthConnectManager.hasBackgroundRead()
                         if (!hasAll) {
-                            requestHealthPermissions.launch(healthConnectManager.permissions)
+                            requestHealthPermissions.launch(
+                                if (wantBackground) healthConnectManager.permissions + HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
+                                else healthConnectManager.permissions
+                            )
+                        } else if (wantBackground && !askedForBackgroundRead()) {
+                            // Existing installs: ask once for background read so the
+                            // cool-down check can see openGym workouts while closed.
+                            markAskedForBackgroundRead()
+                            requestHealthPermissions.launch(setOf(HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND))
                         }
                     } else if (sdkStatus == HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED) {
                         showHcUpdateDialog = true

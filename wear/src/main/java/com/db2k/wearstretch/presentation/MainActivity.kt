@@ -36,6 +36,7 @@ import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.*
 import com.db2k.wearstretch.data.RoutineStore
+import com.db2k.wearstretch.data.RoutineSuggestion
 import com.db2k.wearstretch.data.SettingsStore
 import com.db2k.wearstretch.data.WorkoutRepository
 import com.db2k.wearstretch.model.DataLayerPaths
@@ -61,6 +62,7 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         super.onCreate(savedInstanceState)
         
         refreshRoutines()
+        pinRoutineFromIntent(intent)
         // Re-publish any workout whose DataItem write previously failed. Normally
         // a no-op; workouts are published the moment they finish.
         viewModel.publishUnsynced(this)
@@ -447,6 +449,31 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pinRoutineFromIntent(intent)
+    }
+
+    /** The tile's button pins a routine at the top of the list; the user taps it to start. */
+    private fun pinRoutineFromIntent(intent: Intent?) {
+        val name = intent?.getStringExtra(EXTRA_PIN_ROUTINE_NAME) ?: return
+        val current = RoutineStore.currentSuggestion()
+        if (current != null && current.routineName == null &&
+            RoutineStore.receivedRoutines.any { current.matches(it) && it.name == name }
+        ) return // Keep the phone's cool-down reason.
+        RoutineStore.suggestion.value = RoutineSuggestion(
+            routineId = "",
+            reason = "(last routine)",
+            receivedAtMillis = System.currentTimeMillis(),
+            routineName = name
+        )
+    }
+
+    companion object {
+        const val EXTRA_PIN_ROUTINE_NAME = "pin_routine_name"
     }
 
     override fun onResume() {

@@ -48,6 +48,7 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
+    implementation(libs.androidx.work.runtime.ktx)
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))

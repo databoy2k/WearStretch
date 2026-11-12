@@ -50,3 +50,27 @@ only and need on-device testing on a paired watch + phone.
 ## 8. Process-death restart guard
 - [ ] (Hard to force) After a mid-workout process kill, confirm no bogus
       "Unknown" empty workout is created.
+
+---
+
+# Manual test checklist — home-stack features (branch feature/home-stack)
+
+Build-verified and matcher unit-tested only; needs a paired watch + phone.
+
+## 9. Me tab shows only Wear Stretch stretches
+- [ ] Log a workout in another app that writes to Health Connect (e.g. openGym strength).
+- [ ] The phone's **Me → Recent Sessions** must NOT list it; Wear Stretch sessions still show.
+
+## 10. Cool-down suggestion
+- [ ] On first launch after updating, Health Connect asks for **background read** (if offered on the device). Allow it.
+- [ ] Finish a 10+ minute workout in openGym titled e.g. "Leg day" (Health Connect sync on in openGym).
+- [ ] Within ~30 min (or immediately when opening the phone app) a **"Time to stretch"** notification suggests a lower-body routine.
+- [ ] Tap **Start on watch**: the watch app opens with a highlighted **Suggested after Leg day** card at the top. Tapping it starts the routine.
+- [ ] Stretch first, then open the app: no notification for that workout.
+- [ ] Settings → **Cool-down Suggestions** off: no more notifications.
+- [ ] Without the background-read permission, suggestions only appear when the phone app is opened.
+
+## 11. Tile + complication
+- [ ] Add the **Wear Stretch** tile: shows streak, minutes today, and "Again: <last routine>" (or "Cool-down: …" right after a suggestion).
+- [ ] Tile button opens the app with that routine pinned as Suggested.
+- [ ] Add the **Stretch streak** complication (short text) to a watch face: shows e.g. "3d"; updates after finishing a workout.

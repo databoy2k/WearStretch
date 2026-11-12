@@ -83,6 +83,27 @@ class MobileToWearSender(context: Context) {
         }
     }
 
+    /**
+     * Opens the watch app with [routineId] pinned at the top as "Suggested".
+     * Payload is "routineId\nreason" on the existing START_APP path, so older
+     * watch builds still just open the app. Returns true if a watch got it.
+     */
+    suspend fun suggestRoutine(routineId: String, reason: String): Boolean {
+        return try {
+            val payload = "$routineId\n$reason".toByteArray(Charsets.UTF_8)
+            val nodes = nodeClient.connectedNodes.await()
+            var sent = false
+            for (node in nodes) {
+                messageClient.sendMessage(node.id, DataLayerPaths.START_APP, payload).await()
+                sent = true
+            }
+            sent
+        } catch (e: Exception) {
+            Log.e("StretchWear", "Failed to send suggested routine", e)
+            false
+        }
+    }
+
     suspend fun clearOldIndividualRoutines() {
         try {
             val items = dataClient.dataItems.await()

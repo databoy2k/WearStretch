@@ -2,6 +2,7 @@ package com.db2k.wearstretch.health
 
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ExerciseRoute
 import androidx.health.connect.client.records.ExerciseSessionRecord
@@ -31,6 +32,23 @@ class HealthConnectManager(private val context: Context) {
         HealthPermission.getWritePermission(StepsRecord::class),
         HealthPermission.getReadPermission(StepsRecord::class)
     )
+
+    /**
+     * Lets the cool-down check read openGym's workouts while the app is closed.
+     * Requested separately from [permissions] because older Health Connect
+     * versions don't offer it.
+     */
+    fun backgroundReadAvailable(): Boolean = try {
+        healthConnectClient.features.getFeatureStatus(
+            HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND
+        ) == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+    } catch (e: Exception) {
+        false
+    }
+
+    suspend fun hasBackgroundRead(): Boolean =
+        healthConnectClient.permissionController.getGrantedPermissions()
+            .contains(HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
 
     suspend fun hasAllPermissions(): Boolean {
         val granted = healthConnectClient.permissionController.getGrantedPermissions()
@@ -176,16 +194,53 @@ class HealthConnectManager(private val context: Context) {
         
         android.util.Log.d("HealthConnect", "Total records found: ${response.records.size}")
         
-        // Filter: include everything with a title (our workouts) or matching our package
+        // Only stretching sessions this app wrote. Other apps (openGym, SparkyFitness,
+        // the watch's own fitness app) also write titled exercise sessions; those are
+        // not stretches and must not appear in, or be deletable from, the Me tab.
         val filtered = response.records
-            .filter { 
-                !it.title.isNullOrEmpty() || 
-                it.metadata.dataOrigin.packageName == context.packageName
-            }
+            .filter { isOwnStretch(it) }
             .sortedByDescending { it.startTime }
-            
+
         android.util.Log.d("HealthConnect", "Filtered records count: ${filtered.size}")
         return filtered
+    }
+
+    private fun isOwnStretch(record: ExerciseSessionRecord) =
+        record.exerciseType == ExerciseSessionRecord.EXERCISE_TYPE_STRETCHING &&
+            record.metadata.dataOrigin.packageName == context.packageName
+
+    /**
+     * Workouts written by OTHER apps (e.g. openGym strength sessions) that ended at
+     * or after [since]. Stretching and yoga sessions are skipped: a cool-down is
+     * only suggested after "real" training.
+     */
+    suspend fun readOtherWorkoutsEndedSince(since: Instant): List<ExerciseSessionRecord> {
+        val response = healthConnectClient.readRecords(
+            ReadRecordsRequest(
+                recordType = ExerciseSessionRecord::class,
+                // Sessions can start well before `since` and still end after it.
+                timeRangeFilter = TimeRangeFilter.after(since.minusSeconds(6 * 3600))
+            )
+        )
+        return response.records
+            .filter { it.metadata.dataOrigin.packageName != context.packageName }
+            .filter {
+                it.exerciseType != ExerciseSessionRecord.EXERCISE_TYPE_STRETCHING &&
+                    it.exerciseType != ExerciseSessionRecord.EXERCISE_TYPE_YOGA
+            }
+            .filter { !it.endTime.isBefore(since) }
+            .sortedByDescending { it.endTime }
+    }
+
+    /** True if this app logged a stretch that started at or after [since]. */
+    suspend fun hasStretchedSince(since: Instant): Boolean {
+        val response = healthConnectClient.readRecords(
+            ReadRecordsRequest(
+                recordType = ExerciseSessionRecord::class,
+                timeRangeFilter = TimeRangeFilter.after(since)
+            )
+        )
+        return response.records.any { isOwnStretch(it) }
     }
 
     suspend fun deleteAllStretchingWorkouts() {
