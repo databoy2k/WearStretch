@@ -293,6 +293,15 @@ fun DashboardScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        OutlinedButton(
+                            onClick = { viewModel.updateBuiltInRoutines() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(text = "Update Built-in Routines (keeps yours)")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
                         TextButton(
                             onClick = { viewModel.resetToPresets() },
                             modifier = Modifier.fillMaxWidth(),
