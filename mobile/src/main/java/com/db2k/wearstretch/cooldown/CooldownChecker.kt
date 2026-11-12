@@ -13,11 +13,14 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.records.ExerciseSessionRecord
 import com.db2k.wearstretch.MainActivity
 import com.db2k.wearstretch.R
 import com.db2k.wearstretch.data.RoutineRepository
 import com.db2k.wearstretch.health.HealthConnectManager
 import java.time.Duration
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.Instant
 
 /**
@@ -30,7 +33,10 @@ object CooldownChecker {
     private const val TAG = "WearStretchCooldown"
     private const val PREFS = "cooldown_prefs"
     private const val KEY_ENABLED = "enabled"
-    private const val KEY_HANDLED = "handled_ids"
+    private const val KEY_HANDLED_UNTIL = "handled_until_millis"
+    private val mutex = Mutex()
+    /** Walks are often just the trip home; never let one hide the gym session. */
+    private val LOW_PRIORITY_TYPES = setOf(ExerciseSessionRecord.EXERCISE_TYPE_WALKING)
     const val CHANNEL_ID = "cooldown_channel"
 
     /** Only suggest for workouts that ended this recently. */
@@ -53,22 +59,36 @@ object CooldownChecker {
         val hc = HealthConnectManager(context)
         if (!hc.hasReadPermission()) return
 
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val handled = prefs.getStringSet(KEY_HANDLED, emptySet())!!.toMutableSet()
+        // The worker and the on-open check can run at the same moment; without
+        // this both would notify.
+        mutex.withLock { checkLocked(context, hc) }
+    }
 
-        val workout = try {
-            hc.readOtherWorkoutsEndedSince(Instant.now().minus(WINDOW))
+    private suspend fun checkLocked(context: Context, hc: HealthConnectManager) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // Everything that ended at or before this was already handled. A
+        // timestamp (not a set of ids) so it never grows and never forgets.
+        val handledUntil = Instant.ofEpochMilli(prefs.getLong(KEY_HANDLED_UNTIL, 0L))
+        val windowStart = Instant.now().minus(WINDOW)
+
+        val fresh = try {
+            hc.readOtherWorkoutsEndedSince(maxOf(windowStart, handledUntil.plusMillis(1)))
                 .filter { Duration.between(it.startTime, it.endTime) >= MIN_LENGTH }
-                .firstOrNull { it.metadata.id !in handled }
         } catch (e: Exception) {
             // Background reads throw without the background-read permission.
             Log.w(TAG, "Could not read workouts: ${e.message}")
             return
-        } ?: return
+        }
+        // Several workouts in one window (e.g. a gym session plus the walk home)
+        // get ONE suggestion. The training session wins over a walk, even if the
+        // walk ended later; otherwise the most recent one.
+        val workout = fresh.filter { it.exerciseType !in LOW_PRIORITY_TYPES }.maxByOrNull { it.endTime }
+            ?: fresh.maxByOrNull { it.endTime }
+            ?: return
 
-        // Mark handled first so a crash below never causes repeat notifications.
-        handled += workout.metadata.id
-        prefs.edit { putStringSet(KEY_HANDLED, handled.toList().takeLast(50).toSet()) }
+        // Mark everything seen as handled first, so a crash below never causes
+        // repeat notifications and the skipped walk isn't suggested later.
+        prefs.edit { putLong(KEY_HANDLED_UNTIL, fresh.maxOf { it.endTime }.toEpochMilli()) }
 
         if (hc.hasStretchedSince(workout.endTime)) {
             Log.d(TAG, "Already stretched after ${workout.title}; no suggestion")
