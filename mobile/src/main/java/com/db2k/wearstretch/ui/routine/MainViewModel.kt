@@ -177,6 +177,11 @@ class MainViewModel : ViewModel() {
         selectedStretches.add(stretch.copy(breakDurationSeconds = breakTime))
     }
 
+    fun addStretchesToRoutine(stretches: List<Stretch>) {
+        val breakTime = defaultBreakDuration.value.toIntOrNull() ?: 5
+        selectedStretches.addAll(stretches.map { it.copy(breakDurationSeconds = breakTime) })
+    }
+
     fun applyGlobalBreakTimeToAll(seconds: Int) {
         selectedStretches.indices.forEach { i ->
             selectedStretches[i] = selectedStretches[i].copy(breakDurationSeconds = seconds)
@@ -262,6 +267,22 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Brings the built-in routines up to date WITHOUT touching your own routines
+     * or your stretch library: routines with a built-in id are replaced with the
+     * current version, missing built-ins are added, everything else is kept.
+     */
+    fun updateBuiltInRoutines() {
+        val merged = mergeBuiltInRoutines(routines.toList(), PresetData.presetRoutines)
+        routines.clear()
+        routines.addAll(merged)
+        routineRepository?.saveRoutines(routines.toList())
+        viewModelScope.launch {
+            wearDataSender?.syncAllRoutines(routines.toList())
+        }
+        appContext?.let { Toast.makeText(it, "Built-in routines updated", Toast.LENGTH_SHORT).show() }
+    }
+
     fun resetToPresets() {
         libraryStretches.clear()
         libraryStretches.addAll(PresetData.presetStretches)
@@ -277,6 +298,14 @@ class MainViewModel : ViewModel() {
         
         appContext?.let { Toast.makeText(it, "Reset to defaults", Toast.LENGTH_SHORT).show() }
     }
+}
+
+/** Pure merge for [MainViewModel.updateBuiltInRoutines]; keeps your order, appends new built-ins. */
+fun mergeBuiltInRoutines(current: List<com.db2k.wearstretch.model.Routine>, builtIns: List<com.db2k.wearstretch.model.Routine>): List<com.db2k.wearstretch.model.Routine> {
+    val byId = builtIns.associateBy { it.id }
+    val updated = current.map { byId[it.id] ?: it }
+    val missing = builtIns.filter { b -> current.none { it.id == b.id } }
+    return updated + missing
 }
 
 enum class ImportMode {

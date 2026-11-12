@@ -8,7 +8,6 @@ import com.db2k.wearstretch.data.WearToMobileSender
 import com.db2k.wearstretch.data.WorkoutRepository
 import com.db2k.wearstretch.data.WorkoutSession
 import com.db2k.wearstretch.model.Routine
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class WorkoutViewModel : ViewModel() {
@@ -45,6 +44,10 @@ class WorkoutViewModel : ViewModel() {
         WorkoutSession.isPaused = !WorkoutSession.isPaused
     }
 
+    fun pauseWorkout() {
+        WorkoutSession.isPaused = true
+    }
+
     fun nextStretch(context: Context) {
         // Send intent to WorkoutService to trigger next stretch
         val intent = Intent(context, WorkoutService::class.java).apply {
@@ -53,38 +56,37 @@ class WorkoutViewModel : ViewModel() {
         context.startService(intent)
     }
 
+    fun previous(context: Context) = sendToService(context, WorkoutService.ACTION_PREVIOUS)
+
+    fun extend(context: Context) = sendToService(context, WorkoutService.ACTION_EXTEND)
+
+    private fun sendToService(context: Context, action: String) {
+        context.startService(Intent(context, WorkoutService::class.java).setAction(action))
+    }
+
     fun cancelWorkout(context: Context) {
         context.stopService(Intent(context, WorkoutService::class.java))
         WorkoutSession.reset()
     }
 
-    fun syncUnsynced(context: Context) {
+    /**
+     * Re-publishes any workouts whose DataItem write previously failed. Normally
+     * a no-op (records are published the moment a workout finishes), so this is
+     * cheap to call on launch. Re-publishing is safe: identical DataItems are
+     * ignored by the data layer and the phone dedups on Health Connect insert.
+     */
+    fun publishUnsynced(context: Context) {
         if (workoutRepository == null) workoutRepository = WorkoutRepository(context.applicationContext)
         if (messageSender == null) messageSender = WearToMobileSender(context.applicationContext)
-        
+
         viewModelScope.launch {
             val unsynced = workoutRepository?.getUnsyncedWorkouts() ?: emptyList()
             unsynced.forEach { record ->
-                val success = messageSender?.syncRecord(record) ?: false
-                if (success) {
-                    workoutRepository?.updateSyncStatus(record.id, true)
-                }
-            }
-        }
-    }
-
-    fun forceSyncAll(context: Context) {
-        if (workoutRepository == null) workoutRepository = WorkoutRepository(context.applicationContext)
-        if (messageSender == null) messageSender = WearToMobileSender(context.applicationContext)
-        
-        viewModelScope.launch {
-            val history = workoutRepository?.getHistory() ?: emptyList()
-            history.forEach { record ->
-                val success = messageSender?.syncRecord(record) ?: false
-                if (success) {
-                    workoutRepository?.updateSyncStatus(record.id, true)
-                }
-                delay(200) // Small delay between messages
+                // Only queue it. A successful local publish does NOT mean the phone
+                // has it; the record turns green when the phone deletes the
+                // DataItem (WearDataListenerService). Marking it synced here made
+                // every relaunch show workouts as "sent" with no phone at all.
+                messageSender?.publishRecord(record)
             }
         }
     }

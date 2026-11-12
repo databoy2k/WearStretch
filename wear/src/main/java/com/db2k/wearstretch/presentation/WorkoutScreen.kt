@@ -1,14 +1,19 @@
 package com.db2k.wearstretch.presentation
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import android.graphics.drawable.Animatable
 import android.widget.ImageView
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -36,6 +41,11 @@ import com.db2k.wearstretch.data.SettingsStore
 import com.db2k.wearstretch.model.Stretch
 import java.io.File
 
+// Pager pages: left = animation/description, middle = live workout, right = controls.
+private const val PAGE_DESCRIPTION = 0
+private const val PAGE_WORKOUT = 1
+private const val PAGE_CONTROLS = 2
+
 @Composable
 fun WorkoutScreen(
     stretch: Stretch,
@@ -50,21 +60,52 @@ fun WorkoutScreen(
     currentSteps: Int,
     currentLocation: String?,
     onPauseToggle: () -> Unit,
+    onPause: () -> Unit,
     onSkip: () -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onPrevious: () -> Unit = {},
+    onExtend: () -> Unit = {},
+    phaseDurationSeconds: Int = 0,
+    stretchNumber: Int = 0,
+    stretchCount: Int = 0,
+    totalSecondsLeft: Int = 0
 ) {
-    val pagerState = rememberPagerState(pageCount = { 2 })
+    val pagerState = rememberPagerState(initialPage = PAGE_WORKOUT, pageCount = { 3 })
+
+    // Landing on the description/animation page pauses the workout so the user can
+    // read and follow along without the timer running out. Coming back resumes it
+    // again, but only if this page was what paused it (a manual pause stays).
+    var autoPaused by remember { mutableStateOf(false) }
+    LaunchedEffect(pagerState.settledPage) {
+        when (pagerState.settledPage) {
+            PAGE_DESCRIPTION -> if (!isPaused) {
+                onPause()
+                autoPaused = true
+            }
+            PAGE_WORKOUT -> if (autoPaused) {
+                autoPaused = false
+                if (isPaused) onPauseToggle()
+            }
+        }
+    }
 
     HorizontalPagerScaffold(
         pagerState = pagerState,
         modifier = Modifier.fillMaxSize()
     ) {
+      Box(modifier = Modifier.fillMaxSize()) {
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize()
         ) { page ->
             when (page) {
-                0 -> WorkoutInfoPage(
+                PAGE_DESCRIPTION -> WorkoutDescriptionPage(
+                    stretch = stretch,
+                    isBreak = isBreak,
+                    isSwitchingSides = isSwitchingSides,
+                    isStarting = isStarting
+                )
+                PAGE_WORKOUT -> WorkoutInfoPage(
                     stretch = stretch,
                     timeLeft = timeLeft,
                     isBreak = isBreak,
@@ -74,15 +115,57 @@ fun WorkoutScreen(
                     nextStretchName = nextStretchName,
                     currentHeartRate = currentHeartRate,
                     currentSteps = currentSteps,
-                    currentLocation = currentLocation
+                    currentLocation = currentLocation,
+                    isPaused = isPaused,
+                    positionLabel = if (stretchCount > 0) "$stretchNumber/$stretchCount · ${clockLabel(totalSecondsLeft)} left" else null,
+                    onPauseToggle = {
+                        autoPaused = false
+                        onPauseToggle()
+                    }
                 )
-                1 -> WorkoutControlsPage(isPaused, onPauseToggle, onSkip, onCancel)
+                PAGE_CONTROLS -> WorkoutControlsPage(isPaused, onPauseToggle, onPrevious, onSkip, onExtend, onCancel)
             }
         }
+
+        // Ring around the bezel: how much of the current phase is left. Drawn over
+        // every page so the timer is never out of sight, even on the illustration.
+        val progress = if (phaseDurationSeconds > 0) timeLeft.toFloat() / phaseDurationSeconds else 0f
+        val ringColor = when {
+            isPaused -> Color(0xFFFFB300)
+            isStarting -> Color(0xFFFF9100)
+            isBreak || isSwitchingSides -> Color(0xFF00E5FF)
+            else -> MaterialTheme.colorScheme.primary
+        }
+        // Drawn by hand: the Wear M3 CircularProgressIndicator only rendered its
+        // track here (tested on a Wear OS 5 emulator).
+        Canvas(modifier = Modifier.fillMaxSize().padding(3.dp)) {
+            val stroke = 5.dp.toPx()
+            val inset = stroke / 2
+            val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
+            val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
+            drawArc(
+                color = ringColor.copy(alpha = 0.18f), startAngle = -90f, sweepAngle = 360f,
+                useCenter = false, topLeft = topLeft, size = arcSize,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
+            )
+            drawArc(
+                color = ringColor, startAngle = -90f, sweepAngle = 360f * progress.coerceIn(0f, 1f),
+                useCenter = false, topLeft = topLeft, size = arcSize,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+            )
+        }
+
+      }
     }
 }
 
-@SuppressLint("DiscouragedApi")
+internal fun clockLabel(totalSeconds: Int): String {
+    val s = totalSeconds.coerceAtLeast(0)
+    return "%d:%02d".format(s / 60, s % 60)
+}
+
 @Composable
 private fun WorkoutInfoPage(
     stretch: Stretch,
@@ -94,20 +177,117 @@ private fun WorkoutInfoPage(
     nextStretchName: String?,
     currentHeartRate: Int,
     currentSteps: Int,
-    currentLocation: String?
+    currentLocation: String?,
+    isPaused: Boolean,
+    positionLabel: String?,
+    onPauseToggle: () -> Unit
+) {
+    val isTransition = isBreak || isSwitchingSides || isStarting
+    val activeColor = if (isStarting) Color(0xFFFF9100) else if (isTransition) Color(0xFF00E5FF) else MaterialTheme.colorScheme.primary
+
+    // Which side of a split stretch we're currently on: 1 for the first side, 2 for the second.
+    // Hidden during "Change Position" breaks: there it would show a side for a
+    // stretch that hasn't started yet.
+    val currentSide = if (stretch.isSplit && !isStarting && !isBreak) {
+        if (isSwitchingSides || isSplitSecondHalf) 2 else 1
+    } else {
+        0
+    }
+
+    // Simplified, vertically-centered layout so it reads well on circular watches.
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)
+        ) {
+            // "3/14 · 4:12 left": where you are in the whole routine.
+            if (positionLabel != null) {
+                Text(
+                    text = positionLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = if (isStarting) "Get Ready!" else if (isSwitchingSides) "Switch Sides" else if (isBreak) "Change Position" else stretch.name,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                color = if (isStarting) Color(0xFFFF9100) else if (isTransition) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+
+            // Tap the timer to pause/resume without going to the Controls page.
+            Text(
+                text = "$timeLeft",
+                style = MaterialTheme.typography.displayMedium,
+                color = if (isPaused) activeColor.copy(alpha = 0.4f) else activeColor,
+                modifier = Modifier.clickable(onClickLabel = if (isPaused) "Resume" else "Pause") { onPauseToggle() }
+            )
+            if (isPaused) {
+                Text(
+                    text = "Paused · tap to resume",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFFFFB300)
+                )
+            }
+
+            if (currentSide > 0) {
+                SplitIndicator(side = currentSide)
+            }
+
+            if ((SettingsStore.trackHeartRate.value && currentHeartRate > 0) ||
+                (SettingsStore.trackSteps.value)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (SettingsStore.trackHeartRate.value && currentHeartRate > 0) {
+                        Text(text = "❤ $currentHeartRate", color = Color.Red, style = MaterialTheme.typography.labelMedium)
+                        Spacer(modifier = Modifier.width(16.dp))
+                    }
+                    if (SettingsStore.trackSteps.value) {
+                        Text(text = "👣 $currentSteps", color = Color.Gray, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+
+            if (SettingsStore.trackLocation.value) {
+                Text(
+                    text = if (currentLocation != null) "📍 Location Set" else "📍 Searching...",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (currentLocation != null) Color.Green else Color.Gray
+                )
+            }
+
+            if (isTransition && nextStretchName != null) {
+                Text(
+                    text = if (isStarting) "First: $nextStretchName" else if (isSwitchingSides) "Next: Side 2" else "Next: $nextStretchName",
+                    style = MaterialTheme.typography.labelLarge,
+                    textAlign = TextAlign.Center,
+                    color = if (isStarting) Color(0xFFFF9100) else Color(0xFF00E5FF),
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+@SuppressLint("DiscouragedApi")
+@Composable
+private fun WorkoutDescriptionPage(
+    stretch: Stretch,
+    isBreak: Boolean,
+    isSwitchingSides: Boolean,
+    isStarting: Boolean
 ) {
     val listState = rememberTransformingLazyColumnState()
     val currentContext = LocalContext.current
     val pkgName = LocalContext.current.packageName
     val isTransition = isBreak || isSwitchingSides || isStarting
-    val activeColor = if (isStarting) Color(0xFFFF9100) else if (isTransition) Color(0xFF00E5FF) else MaterialTheme.colorScheme.primary
-    
-    val remainingSplits = if (stretch.isSplit && !isStarting) {
-        if (isSwitchingSides || (isSplitSecondHalf && !isBreak)) 1 else 2
-    } else {
-        0
-    }
-    
+
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val scale by infiniteTransition.animateFloat(
         initialValue = 0.95f,
@@ -147,65 +327,13 @@ private fun WorkoutInfoPage(
         ) {
             item {
                 Text(
-                    text = if (isStarting) "Get Ready!" else if (isSwitchingSides) "Switch Sides" else if (isBreak) "Change Position" else stretch.name,
+                    text = stretch.name,
                     style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center,
-                    color = if (isStarting) Color(0xFFFF9100) else if (isTransition) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    color = if (isTransition) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onBackground,
+                    // Extra inset: the top of a round screen is narrow, long names clipped.
+                    modifier = Modifier.padding(start = 28.dp, end = 28.dp, top = 12.dp)
                 )
-            }
-
-            item {
-                Text(
-                    text = "$timeLeft",
-                    style = MaterialTheme.typography.displayMedium,
-                    color = activeColor
-                )
-            }
-
-            if (remainingSplits > 0) {
-                item {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    SplitIndicator(remaining = remainingSplits)
-                    Spacer(modifier = Modifier.height(6.dp))
-                }
-            }
-
-            if (SettingsStore.trackHeartRate.value || SettingsStore.trackSteps.value) {
-                item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (SettingsStore.trackHeartRate.value && currentHeartRate > 0) {
-                            Text(text = "❤ $currentHeartRate", color = Color.Red, style = MaterialTheme.typography.labelMedium)
-                            Spacer(modifier = Modifier.width(16.dp))
-                        }
-                        if (SettingsStore.trackSteps.value) {
-                            Text(text = "👣 $currentSteps", color = Color.Gray, style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
-            }
-
-            if (SettingsStore.trackLocation.value) {
-                item {
-                    Text(
-                        text = if (currentLocation != null) "📍 Location Set" else "📍 Searching...",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (currentLocation != null) Color.Green else Color.Gray,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-            }
-
-            if (isTransition && nextStretchName != null) {
-                item {
-                    Text(
-                        text = if (isStarting) "First: $nextStretchName" else if (isSwitchingSides) "Next: Side 2" else "Next: $nextStretchName",
-                        style = MaterialTheme.typography.labelLarge,
-                        textAlign = TextAlign.Center,
-                        color = if (isStarting) Color(0xFFFF9100) else Color(0xFF00E5FF),
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
             }
 
             // Stretch image/animation
@@ -258,7 +386,7 @@ private fun WorkoutInfoPage(
                     text = stretch.description,
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 32.dp)
                 )
             }
         }
@@ -269,11 +397,25 @@ private fun WorkoutInfoPage(
 private fun WorkoutControlsPage(
     isPaused: Boolean,
     onPauseToggle: () -> Unit,
+    onPrevious: () -> Unit,
     onSkip: () -> Unit,
+    onExtend: () -> Unit,
     onCancel: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     val listState = rememberTransformingLazyColumnState()
+    // Two-tap cancel: one stray tap must not throw away a workout.
+    var confirmCancel by remember { mutableStateOf(false) }
+    LaunchedEffect(confirmCancel) {
+        if (confirmCancel) {
+            kotlinx.coroutines.delay(3000)
+            confirmCancel = false
+        }
+    }
+    fun tap(action: () -> Unit) {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        action()
+    }
 
     ScreenScaffold(scrollState = listState) { contentPadding ->
         TransformingLazyColumn(
@@ -282,47 +424,58 @@ private fun WorkoutControlsPage(
             contentPadding = contentPadding,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            item {
-                ListHeader {
-                    Text(text = "Controls")
-                }
-            }
+            item { ListHeader { Text(text = "Controls") } }
 
             item {
                 Button(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onPauseToggle()
-                    }
+                    onClick = { tap(onPauseToggle) }
                 ) {
                     Text(text = if (isPaused) "Resume" else "Pause")
                 }
             }
 
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onSkip()
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(text = "Skip")
+                    OutlinedButton(modifier = Modifier.weight(1f), onClick = { tap(onPrevious) }) {
+                        Text(text = "Back", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    }
+                    OutlinedButton(modifier = Modifier.weight(1f), onClick = { tap(onSkip) }) {
+                        Text(text = "Skip", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    }
                 }
             }
 
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(
+                OutlinedButton(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    onClick = { tap(onExtend) }
+                ) {
+                    Text(text = "+10 seconds", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                }
+            }
+
+            item {
+                TextButton(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
                     onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onCancel()
+                        if (confirmCancel) {
+                            confirmCancel = false
+                            tap(onCancel)
+                        } else {
+                            confirmCancel = true
+                        }
                     }
                 ) {
-                    Text(text = "Cancel Workout", color = MaterialTheme.colorScheme.error)
+                    Text(
+                        text = if (confirmCancel) "Tap again to cancel" else "Cancel Workout",
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
@@ -355,21 +508,22 @@ private fun AnimatedVectorImage(
 }
 
 @Composable
-private fun SplitIndicator(remaining: Int) {
-    val (backgroundColor, textColor) = when (remaining) {
-        2 -> Pair(Color(0xFFFFB300), Color.Black) // Amber/Yellow
-        1 -> Pair(Color(0xFFE91E63), Color.White) // Rose/Pink
+private fun SplitIndicator(side: Int) {
+    val (backgroundColor, textColor) = when (side) {
+        1 -> Pair(Color(0xFFFFB300), Color.Black) // Side 1: Amber
+        2 -> Pair(Color(0xFFE91E63), Color.White) // Side 2: Rose
         else -> Pair(Color(0xFF00E676), Color.Black) // Vibrant Green
     }
-    
+
+    // Spelled out: a bare "1"/"2" dot was easy to misread as "stretches left".
     Box(
         modifier = Modifier
-            .size(24.dp)
-            .background(color = backgroundColor, shape = CircleShape),
+            .background(color = backgroundColor, shape = CircleShape)
+            .padding(horizontal = 10.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "$remaining",
+            text = "Side $side of 2",
             style = MaterialTheme.typography.labelSmall,
             color = textColor,
             textAlign = TextAlign.Center

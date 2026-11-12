@@ -6,6 +6,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
 class WorkoutRepository(context: Context) {
+    private val appContext = context.applicationContext
     private val prefs = context.getSharedPreferences("workout_history", Context.MODE_PRIVATE)
     private val gson = Gson()
 
@@ -13,6 +14,9 @@ class WorkoutRepository(context: Context) {
         val history = getHistory().toMutableList()
         history.add(0, record) // Newest first
         saveHistory(history)
+        // Streak / minutes changed: redraw the tile and watch-face complication.
+        runCatching { com.db2k.wearstretch.tile.StretchTileService.requestUpdate(appContext) }
+        runCatching { com.db2k.wearstretch.complication.StretchComplicationService.requestUpdate(appContext) }
     }
 
     fun updateSyncStatus(recordId: String, synced: Boolean) {

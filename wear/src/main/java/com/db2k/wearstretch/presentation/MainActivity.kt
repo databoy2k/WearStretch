@@ -36,8 +36,11 @@ import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.*
 import com.db2k.wearstretch.data.RoutineStore
+import com.db2k.wearstretch.data.RoutineSuggestion
 import com.db2k.wearstretch.data.SettingsStore
+import com.db2k.wearstretch.data.StretchStats
 import com.db2k.wearstretch.data.WorkoutRepository
+import com.db2k.wearstretch.data.WorkoutSession
 import com.db2k.wearstretch.model.DataLayerPaths
 import com.db2k.wearstretch.model.Routine
 import com.db2k.wearstretch.presentation.theme.WearStretchTheme
@@ -61,7 +64,10 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         super.onCreate(savedInstanceState)
         
         refreshRoutines()
-        viewModel.syncUnsynced(this)
+        pinRoutineFromIntent(intent)
+        // Re-publish any workout whose DataItem write previously failed. Normally
+        // a no-op; workouts are published the moment they finish.
+        viewModel.publishUnsynced(this)
 
         setContent {
             WearStretchTheme {
@@ -329,21 +335,71 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                         BackHandler {
                             viewModel.cancelWorkout(context)
                         }
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "Workout Finished!", style = MaterialTheme.typography.titleLarge)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(onClick = { 
-                                    viewModel.cancelWorkout(context)
-                                    finish() 
-                                }) {
-                                    Text(text = "Sync and Close App")
+                        val finishedListState = rememberTransformingLazyColumnState()
+                        ScreenScaffold(scrollState = finishedListState) { contentPadding ->
+                            TransformingLazyColumn(
+                                state = finishedListState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = contentPadding,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                item {
+                                    Text(
+                                        text = "🎉",
+                                        style = MaterialTheme.typography.displaySmall
+                                    )
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                TextButton(onClick = {
-                                    viewModel.cancelWorkout(context)
-                                }) {
-                                    Text(text = "Exit to Routines")
+                                item {
+                                    Text(
+                                        text = "Workout Complete!",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                    )
+                                }
+                                // Summary: what you just did, so finishing feels like progress.
+                                item {
+                                    val summary = remember {
+                                        finishSummary(
+                                            routine = WorkoutSession.routine,
+                                            startMillis = WorkoutSession.startTimeMillis,
+                                            endMillis = WorkoutSession.endTimeMillis,
+                                            skipped = WorkoutSession.skippedStretches,
+                                            heartRates = WorkoutSession.heartRateSamples.toList(),
+                                            streakDays = StretchStats.from(WorkoutRepository(context).getHistory()).streakDays
+                                        )
+                                    }
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                                    ) {
+                                        summary.forEach { line ->
+                                            Text(
+                                                text = line,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                textAlign = TextAlign.Center,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                                // One button, below the summary (so it isn't where Skip
+                                // was). The workout is sent to the phone automatically,
+                                // so the old "Sync & Close" button did nothing extra.
+                                item {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Button(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                                        onClick = {
+                                            viewModel.cancelWorkout(context)
+                                        }
+                                    ) {
+                                        Text(
+                                            text = "Done",
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -372,17 +428,27 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                             currentSteps = viewModel.currentSteps,
                             currentLocation = viewModel.locationSnapshot,
                             onPauseToggle = { viewModel.togglePause() },
+                            onPause = { viewModel.pauseWorkout() },
                             onSkip = { viewModel.nextStretch(context) },
                             onCancel = {
                                 viewModel.cancelWorkout(context)
                                 stopWorkoutService()
-                            }
+                            },
+                            onPrevious = { viewModel.previous(context) },
+                            onExtend = { viewModel.extend(context) },
+                            phaseDurationSeconds = WorkoutSession.phaseDurationSeconds,
+                            stretchNumber = displayedStretchNumber(viewModel.currentStretchIndex, isBreak, routine.stretches.size),
+                            stretchCount = routine.stretches.size,
+                            totalSecondsLeft = remainingRoutineSeconds(
+                                routine, viewModel.currentStretchIndex, viewModel.timeLeftSeconds,
+                                viewModel.isStarting, isBreak, viewModel.isSwitchingSides, viewModel.isSplitSecondHalf
+                            )
                         )
                     } else {
                         when (currentScreen) {
                             "history" -> WorkoutHistoryScreen(
                                 onBack = { currentScreen = "routines" },
-                                onSyncClick = { viewModel.forceSyncAll(context) }
+                                onSyncClick = { viewModel.publishUnsynced(context) }
                             )
                             else -> RoutineSelectionScreen(
                                 onRoutineSelected = { routine ->
@@ -408,10 +474,34 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pinRoutineFromIntent(intent)
+    }
+
+    /** The tile's button pins a routine at the top of the list; the user taps it to start. */
+    private fun pinRoutineFromIntent(intent: Intent?) {
+        val name = intent?.getStringExtra(EXTRA_PIN_ROUTINE_NAME) ?: return
+        val current = RoutineStore.currentSuggestion()
+        if (current != null && current.routineName == null &&
+            RoutineStore.receivedRoutines.any { current.matches(it) && it.name == name }
+        ) return // Keep the phone's cool-down reason.
+        RoutineStore.suggestion.value = RoutineSuggestion(
+            routineId = "",
+            reason = "(last routine)",
+            receivedAtMillis = System.currentTimeMillis(),
+            routineName = name
+        )
+    }
+
+    companion object {
+        const val EXTRA_PIN_ROUTINE_NAME = "pin_routine_name"
+    }
+
     override fun onResume() {
         super.onResume()
         dataClient.addListener(this)
-        viewModel.syncUnsynced(this)
     }
 
     override fun onPause() {
@@ -469,16 +559,39 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
         lifecycleScope.launch {
             try {
                 val dataItems = dataClient.dataItems.await()
+                var foundPhoneRoutines = false
                 for (item in dataItems) {
                     if (item.uri.path == DataLayerPaths.ROUTINE_LIST) {
                         processRoutinesDataItem(item)
+                        foundPhoneRoutines = true
                     } else if (item.uri.path?.startsWith("/routines/") == true) {
                         dataClient.deleteDataItems(item.uri)
                     }
                 }
+                dataItems.release()
+                if (!foundPhoneRoutines) loadBundledPresets()
             } catch (_: Exception) {
-            Log.e("WearStretch", "Manual refresh failed")
+                Log.e("WearStretch", "Manual refresh failed")
+                loadBundledPresets()
+            }
         }
+    }
+
+    /**
+     * The watch is the main app, so it must work before (or without) the phone
+     * ever syncing: fall back to the preset routines bundled in assets. Phone
+     * routines replace these as soon as they arrive.
+     */
+    private fun loadBundledPresets() {
+        if (RoutineStore.receivedRoutines.isNotEmpty()) return
+        try {
+            val json = assets.open("preset_routines.json").bufferedReader().use { it.readText() }
+            val type = object : TypeToken<List<Routine>>() {}.type
+            val presets: List<Routine> = gson.fromJson(json, type)
+            RoutineStore.receivedRoutines.addAll(presets)
+            Log.d("WearStretch", "No phone routines yet; loaded ${presets.size} bundled presets")
+        } catch (e: Exception) {
+            Log.e("WearStretch", "Could not load bundled presets", e)
         }
     }
 

@@ -63,17 +63,28 @@ class WorkoutService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "ACTION_NEXT_STRETCH") {
-            nextStretch()
-            return START_STICKY
+        when (intent?.action) {
+            "ACTION_NEXT_STRETCH" -> { skip(); return START_STICKY }
+            ACTION_PREVIOUS -> { previous(); return START_STICKY }
+            ACTION_EXTEND -> { extend(10); return START_STICKY }
         }
 
-        val routineName = WorkoutSession.routine?.name ?: "Stretching"
-        startWorkoutNotification(routineName)
-        
+        val routine = WorkoutSession.routine
+        if (routine == null || WorkoutSession.isFinished) {
+            // System-initiated restart (START_STICKY, null intent after process
+            // death) with no active session. Don't run tracking — it would
+            // fabricate an empty "Unknown" workout. Satisfy the foreground
+            // contract briefly, then stop.
+            startWorkoutNotification("Stretching")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        startWorkoutNotification(routine.name)
+
         // Start tracking
         startWorkoutTracking()
-        
+
         return START_STICKY
     }
 
@@ -94,9 +105,14 @@ class WorkoutService : Service(), SensorEventListener {
                 }
                 
                 if (SettingsStore.trackSteps.value && hasStepPermission) {
+                    // Register BOTH sensors. The detector fires immediately once
+                    // per step (reliable live count on short sessions); the
+                    // counter is authoritative but its first reading — which sets
+                    // our baseline — can be batched/delayed, so it can't be the
+                    // sole source or a brief workout may record zero steps.
                     stepSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
                     stepDetectorSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
-                    
+
                     if (stepDetectorSensor != null) {
                         sensorManager?.registerListener(this, stepDetectorSensor, SensorManager.SENSOR_DELAY_FASTEST)
                     }
@@ -198,21 +214,27 @@ class WorkoutService : Service(), SensorEventListener {
         runTimer()
     }
 
-    private fun runTimer() {
+    private fun runTimer(newPhase: Boolean = true) {
         timerJob?.cancel()
         val durationAtStart = WorkoutSession.timeLeftSeconds
+        if (newPhase) WorkoutSession.phaseDurationSeconds = durationAtStart
         val timerStartTime = System.currentTimeMillis()
+        var lastTick = durationAtStart
         
         timerJob = serviceScope.launch {
             while (WorkoutSession.timeLeftSeconds > 0) {
                 if (!WorkoutSession.isPaused && !WorkoutSession.isFinished) {
                     val elapsedSeconds = (System.currentTimeMillis() - timerStartTime) / 1000
                     WorkoutSession.timeLeftSeconds = (durationAtStart - elapsedSeconds).toInt().coerceAtLeast(0)
-                    delay(500)
+                    // 3-2-1 ticks before every change, so you can stretch eyes-closed.
+                    val left = WorkoutSession.timeLeftSeconds
+                    if (left in 1..3 && left < lastTick) vibrate(VibeType.TICK)
+                    lastTick = left
+                    delay(250)
                 } else {
                     delay(100)
                     if (!WorkoutSession.isPaused && !WorkoutSession.isFinished) {
-                        runTimer()
+                        runTimer(newPhase = false)
                         return@launch
                     }
                 }
@@ -261,6 +283,55 @@ class WorkoutService : Service(), SensorEventListener {
         }
     }
 
+    /**
+     * "Skip" = end the current phase now and go to the next one. Previously this
+     * always jumped to the next stretch, so skipping "Get Ready" skipped the first
+     * stretch and skipping "Switch Sides" skipped side 2 entirely.
+     */
+    fun skip() {
+        val current = WorkoutSession.routine?.stretches?.getOrNull(WorkoutSession.currentStretchIndex)
+        val inStretch = !WorkoutSession.isStarting && !WorkoutSession.isBreak && !WorkoutSession.isSwitchingSides
+        if (inStretch && current != null && (!current.isSplit || WorkoutSession.isSplitSecondHalf)) {
+            WorkoutSession.skippedStretches++
+        }
+        when {
+            current == null -> finishWorkout()
+            WorkoutSession.isStarting -> startStretch(current, secondHalf = false)
+            WorkoutSession.isSwitchingSides -> startStretch(current, secondHalf = true)
+            WorkoutSession.isBreak -> nextStretch()
+            current.isSplit && !WorkoutSession.isSplitSecondHalf -> startStretch(current, secondHalf = true)
+            else -> nextStretch()
+        }
+    }
+
+    /**
+     * Back one step: during a break, side switch or side 2 → restart the current
+     * stretch from side 1; during a stretch → the previous stretch (or restart
+     * this one if it's the first).
+     */
+    fun previous() {
+        val stretches = WorkoutSession.routine?.stretches ?: return
+        val current = stretches.getOrNull(WorkoutSession.currentStretchIndex) ?: return
+        when {
+            WorkoutSession.isStarting -> return
+            WorkoutSession.isBreak || WorkoutSession.isSwitchingSides || WorkoutSession.isSplitSecondHalf ->
+                startStretch(current, secondHalf = false)
+            WorkoutSession.currentStretchIndex > 0 -> {
+                WorkoutSession.currentStretchIndex--
+                startStretch(stretches[WorkoutSession.currentStretchIndex], secondHalf = false)
+            }
+            else -> startStretch(current, secondHalf = false)
+        }
+    }
+
+    /** Adds time to whatever is running now (stretch, break or get ready). */
+    fun extend(seconds: Int) {
+        if (WorkoutSession.isFinished) return
+        WorkoutSession.timeLeftSeconds += seconds
+        WorkoutSession.phaseDurationSeconds += seconds
+        runTimer(newPhase = false)
+    }
+
     fun nextStretch() {
         val nextIndex = WorkoutSession.currentStretchIndex + 1
         val nextStretch = WorkoutSession.routine?.stretches?.getOrNull(nextIndex)
@@ -274,11 +345,12 @@ class WorkoutService : Service(), SensorEventListener {
 
     private fun finishWorkout() {
         WorkoutSession.isFinished = true
+        WorkoutSession.endTimeMillis = System.currentTimeMillis()
         vibrate(VibeType.LONG)
         
         sensorManager?.unregisterListener(this)
 
-        val endTime = System.currentTimeMillis()
+        val endTime = WorkoutSession.endTimeMillis
         val record = WorkoutRecord(
             id = UUID.randomUUID().toString(),
             routineName = WorkoutSession.routine?.name ?: "Unknown",
@@ -292,23 +364,13 @@ class WorkoutService : Service(), SensorEventListener {
         
         Log.d("WearStretch", "Saving workout: steps=${record.stepCount}, location=${record.location}")
         workoutRepository?.saveWorkout(record)
-        
+
         serviceScope.launch {
-            val success = messageSender?.syncRecord(record) ?: false
-            if (success) {
-                workoutRepository?.updateSyncStatus(record.id, true)
-            }
-            
-            // Sync unsynced in background
-            val unsynced = workoutRepository?.getUnsyncedWorkouts() ?: emptyList()
-            unsynced.forEach { unsyncedRecord ->
-                val syncSuccess = messageSender?.syncRecord(unsyncedRecord) ?: false
-                if (syncSuccess) {
-                    workoutRepository?.updateSyncStatus(unsyncedRecord.id, true)
-                }
-            }
-            
-            // Stop service after finishing work
+            // Hand the record to the data layer and forget it. The record stays
+            // "not sent" until the PHONE confirms by deleting the DataItem (see
+            // WearDataListenerService) — a successful local publish only means it
+            // is queued, not that the phone has it, so we must not claim synced.
+            messageSender?.publishRecord(record)
             stopSelf()
         }
     }
@@ -321,7 +383,7 @@ class WorkoutService : Service(), SensorEventListener {
     }
 
     // Vibrations helper
-    private enum class VibeType { SHORT, NORMAL, LONG }
+    private enum class VibeType { TICK, SHORT, NORMAL, LONG }
 
     private fun vibrate(type: VibeType) {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -333,6 +395,7 @@ class WorkoutService : Service(), SensorEventListener {
         }
 
         val duration = when (type) {
+            VibeType.TICK -> 40L
             VibeType.SHORT -> 200L
             VibeType.NORMAL -> 500L
             VibeType.LONG -> 1000L
@@ -418,5 +481,10 @@ class WorkoutService : Service(), SensorEventListener {
         )
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(serviceChannel)
+    }
+
+    companion object {
+        const val ACTION_PREVIOUS = "ACTION_PREVIOUS"
+        const val ACTION_EXTEND = "ACTION_EXTEND"
     }
 }

@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.health.connect.client.records.ExerciseSessionRecord
+import com.db2k.wearstretch.cooldown.CooldownChecker
 import com.db2k.wearstretch.health.HealthConnectManager
 import com.db2k.wearstretch.health.WorkoutDetails
 import com.db2k.wearstretch.ui.routine.ImportMode
@@ -54,6 +55,7 @@ fun DashboardScreen(
     var isLoadingDetails by remember { mutableStateOf(false) }
 
     var settingsExpanded by remember { mutableStateOf(value = false) }
+    var cooldownEnabled by remember { mutableStateOf(CooldownChecker.isEnabled(context)) }
     var historyExpanded by remember { mutableStateOf(value = true) }
 
     if (selectedWorkout != null) {
@@ -226,6 +228,23 @@ fun DashboardScreen(
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
+                                Text(text = "Cool-down Suggestions")
+                                Text(
+                                    text = "Suggest a stretch after workouts from other apps (e.g. openGym)",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Switch(
+                                checked = cooldownEnabled,
+                                onCheckedChange = {
+                                    cooldownEnabled = it
+                                    CooldownChecker.setEnabled(context, it)
+                                }
+                            )
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(text = "Start Delay")
                                 Text(text = "${viewModel.settings.value.startDelaySeconds} seconds", style = MaterialTheme.typography.bodySmall)
                             }
@@ -270,6 +289,15 @@ fun DashboardScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(text = "Clear Health Connect Data")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedButton(
+                            onClick = { viewModel.updateBuiltInRoutines() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(text = "Update Built-in Routines (keeps yours)")
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))

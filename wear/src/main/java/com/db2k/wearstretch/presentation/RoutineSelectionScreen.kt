@@ -43,6 +43,32 @@ fun RoutineSelectionScreen(onRoutineSelected: (Routine) -> Unit, onHistoryClick:
                 }
             }
 
+            // Cool-down suggested by the phone after a workout from another app.
+            val suggestion = RoutineStore.currentSuggestion()
+            val suggested = suggestion?.let { sug -> RoutineStore.receivedRoutines.firstOrNull { sug.matches(it) } }
+            if (suggestion != null && suggested != null) {
+                item {
+                    TitleCard(
+                        onClick = {
+                            RoutineStore.suggestion.value = null
+                            onRoutineSelected(suggested)
+                        },
+                        title = { Text(text = suggested.name) },
+                        subtitle = {
+                            Text(
+                                text = "Suggested" + if (suggestion.reason.isNotBlank()) " ${suggestion.reason}" else ""
+                            )
+                        },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            titleColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            subtitleColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                }
+            }
+
             if (RoutineStore.receivedRoutines.isEmpty()) {
                 item {
                     Text(text = "No routines found. Sync from your phone!", modifier = Modifier.padding(16.dp))
@@ -52,7 +78,7 @@ fun RoutineSelectionScreen(onRoutineSelected: (Routine) -> Unit, onHistoryClick:
                     TitleCard(
                         onClick = { onRoutineSelected(routine) },
                         title = { Text(text = routine.name) },
-                        subtitle = { Text(text = "${routine.stretches.size} stretches") }
+                        subtitle = { Text(text = "${routine.stretches.size} stretches · ${routineMinutesLabel(routine)}") }
                     )
                 }
             }
@@ -76,4 +102,12 @@ fun RoutineSelectionScreen(onRoutineSelected: (Routine) -> Unit, onHistoryClick:
             }
         }
     }
+}
+
+/** Rough total time including breaks and side switches, e.g. "~6 min". */
+internal fun routineMinutesLabel(routine: Routine): String {
+    val seconds = routine.stretches.sumOf { st ->
+        st.durationSeconds + st.breakDurationSeconds + if (st.isSplit) st.splitBreakDurationSeconds else 0
+    }
+    return "~${((seconds + 30) / 60).coerceAtLeast(1)} min"
 }
