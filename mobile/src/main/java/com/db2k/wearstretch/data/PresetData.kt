@@ -143,6 +143,27 @@ object PresetData {
                 presetStretches.find { it.id == "6" }!!   // Cobra Stretch
             ),
             defaultBreakDurationSeconds = 8
+        ),
+        Routine(
+            id = "preset_full_stretch",
+            name = "Stretching Routine",
+            stretches = listOf(
+                presetStretches.find { it.id == "50" }!!.copy(durationSeconds = 40, breakDurationSeconds = 8), // Standing Calf Stretch
+                presetStretches.find { it.id == "4" }!!.copy(durationSeconds = 40, breakDurationSeconds = 8), // Quadriceps Stretch
+                presetStretches.find { it.id == "38" }!!.copy(durationSeconds = 40, breakDurationSeconds = 8), // Kneeling Hip Flexor Lunge
+                presetStretches.find { it.id == "7" }!!.copy(durationSeconds = 40, breakDurationSeconds = 8), // Butterfly Stretch
+                presetStretches.find { it.id == "35" }!!.copy(durationSeconds = 40, breakDurationSeconds = 8), // Torso Twist
+                presetStretches.find { it.id == "43" }!!.copy(durationSeconds = 60, breakDurationSeconds = 8), // Seated Single-Leg Hamstring Stretch
+                presetStretches.find { it.id == "37" }!!.copy(durationSeconds = 50, breakDurationSeconds = 8), // Figure-Four Stretch
+                presetStretches.find { it.id == "29" }!!.copy(durationSeconds = 50, breakDurationSeconds = 8), // Supine Spinal Twist
+                presetStretches.find { it.id == "6" }!!.copy(durationSeconds = 30, breakDurationSeconds = 8), // Cobra Stretch
+                presetStretches.find { it.id == "5" }!!.copy(durationSeconds = 45, breakDurationSeconds = 8), // Child's Pose
+                presetStretches.find { it.id == "18" }!!.copy(durationSeconds = 30, breakDurationSeconds = 8), // Upper Back Extension
+                presetStretches.find { it.id == "11" }!!.copy(durationSeconds = 30, breakDurationSeconds = 8), // Triceps Stretch
+                presetStretches.find { it.id == "24" }!!.copy(durationSeconds = 30, breakDurationSeconds = 8), // Bicep Wall Stretch
+                presetStretches.find { it.id == "1" }!!.copy(durationSeconds = 30, breakDurationSeconds = 8) // Neck Stretch
+            ),
+            defaultBreakDurationSeconds = 8
         )
     )
 }
